@@ -162,6 +162,10 @@ table.rates td{padding:3px}
 table.rates td:first-child{color:var(--ink-2);white-space:nowrap;padding-right:8px}
 table.rates input{padding:8px;text-align:right;font-size:14px;font-variant-numeric:tabular-nums}
 
+.morebtn{
+  display:block;width:100%;margin-top:10px;padding:9px 0;border:1px solid var(--border);border-radius:10px;
+  background:transparent;color:var(--ink-3);font-size:13.5px;font-weight:600;cursor:pointer;font-family:inherit;
+}
 /* ---- 계산 기준 ---- */
 .rule-title{font-size:13.5px;color:var(--ink-3);line-height:1.6}
 .rule-sec{font-size:13.5px;font-weight:700;color:var(--ink-1);margin-top:16px;padding-top:14px;border-top:1px solid var(--grid)}
@@ -457,7 +461,7 @@ nav.tabs button.on{color:var(--accent)}
 
 <script>
 'use strict';
-const APP_VER = '19 (2026-07-09)';
+const APP_VER = '20 (2026-07-09)';
 // 주의: 아래 두 선언은 시드 주입(save 호출)보다 반드시 먼저 와야 함
 const BACKUP_URL = 'https://script.google.com/macros/s/AKfycbyJUA-w8falwPZa0uOmKND2MlHkfh4L2RoDwg4IAvw51X5BEnNscW-QPFgE6aBJzvv75g/exec'; // 구글시트 자동백업 (ho910830)
 let backupTimer = null;
@@ -472,6 +476,7 @@ window.addEventListener('error', function(ev){
   }catch(e){}
 });
 const CHANGELOG = [
+  ['v20','업데이트 내역·접속 기록을 5개씩 보여주고 더보기로 펼치기'],
   ['v19','설정의 계산 기준을 보기 쉽게 정리'],
   ['v18','삭제 전 "정말로 삭제할까요?" 확인창 (아이폰에서 확인 없이 지워지던 문제 수정)'],
   ['v17','기기 간 자동 동기화 — 폰에서 넣은 기록이 PC에서도 보임 (구글시트 경유)'],
@@ -1292,11 +1297,16 @@ function envSummary(){
   return `${os} · ${br} · ${screen.width}×${screen.height}`;
 }
 function readVisits(){ try{ return JSON.parse(localStorage.getItem(VISIT_KEY))||[]; }catch(e){ return []; } }
+let visitsOpen = false;
+function toggleVisits(){ visitsOpen = !visitsOpen; renderVisits(); }
 function renderVisits(){
   const list = readVisits();
-  $('#visitLog').innerHTML = list.length
-    ? list.map(v=>`<div>${v.t} · ${v.ip||'IP 확인 중'} · ${v.env}</div>`).join('')
-    : '아직 기록이 없습니다';
+  if(!list.length){ $('#visitLog').innerHTML = '아직 기록이 없습니다'; return; }
+  const shown = visitsOpen ? list : list.slice(0,5);
+  let html = shown.map(v=>`<div>${v.t} · ${v.ip||'IP 확인 중'} · ${v.env}</div>`).join('');
+  if(list.length > 5)
+    html += `<button type="button" class="morebtn" onclick="toggleVisits()">${visitsOpen ? '접기 ▲' : `더보기 (${list.length-5}개) ▼`}</button>`;
+  $('#visitLog').innerHTML = html;
 }
 function logVisit(){
   let list = readVisits();
@@ -1321,7 +1331,16 @@ renderAll();
 tickNow();
 $('#appVer').textContent = APP_VER;
 $('#appVerTop').textContent = APP_VER;
-$('#chLog').innerHTML = CHANGELOG.map(c=>`<div><b style="color:var(--ink-1)">${c[0]}</b> — ${c[1]}</div>`).join('');
+let chlogOpen = false;
+function toggleChlog(){ chlogOpen = !chlogOpen; renderChlog(); }
+function renderChlog(){
+  const shown = chlogOpen ? CHANGELOG : CHANGELOG.slice(0,5);
+  let html = shown.map(c=>`<div><b style="color:var(--ink-1)">${c[0]}</b> — ${c[1]}</div>`).join('');
+  if(CHANGELOG.length > 5)
+    html += `<button type="button" class="morebtn" onclick="toggleChlog()">${chlogOpen ? '접기 ▲' : `더보기 (${CHANGELOG.length-5}개) ▼`}</button>`;
+  $('#chLog').innerHTML = html;
+}
+renderChlog();
 logVisit();
 checkUpdate();
 renderBackupStatus();
