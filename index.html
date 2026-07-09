@@ -303,8 +303,11 @@ nav.tabs button.on{color:var(--accent)}
     <input type="number" id="inKwh" inputmode="decimal" step="0.1" min="0" placeholder="예: 22" enterkeyhint="next">
 
     <div id="timeRow">
-      <label class="f" for="inStart">시작 시간 <span class="nowchip">지금 <span id="nowClock">--:--</span> 자동 · 직접 수정 가능</span></label>
-      <input type="time" id="inStart">
+      <label class="f" for="inStartH">시작 시간 <span class="nowchip">지금 <span id="nowClock">--:--</span> 자동</span></label>
+      <div class="row2">
+        <select id="inStartH"></select>
+        <select id="inStartM"></select>
+      </div>
     </div>
 
 
@@ -402,8 +405,9 @@ nav.tabs button.on{color:var(--accent)}
 
 <script>
 'use strict';
-const APP_VER = '13 (2026-07-09)';
+const APP_VER = '14 (2026-07-09)';
 const CHANGELOG = [
+  ['v14','시작시간을 시·분(10분 단위) 선택으로 변경, 24시간 표기 · 분 선택하면 자동으로 다음 칸 이동'],
   ['v13','자동 백업 계정을 ho910830 구글시트로 이전'],
   ['v12','구글시트 자동 백업 · 요일 크게 표시 · 탭탭탭 빠른 입력 · 시작시간 기준 복귀'],
   ['v11','업데이트 알림 배너 · 업데이트 내역 · 접속 기록(IP/환경)'],
@@ -854,7 +858,7 @@ document.querySelectorAll('#modeSeg button').forEach(b=> b.onclick = ()=>setForm
 function readForm(){
   return {
     date: $('#inDate').value,
-    start: $('#inStart').value,
+    start: getStartVal(),
     kwh: parseFloat($('#inKwh').value) || 0,
     cost: parseInt($('#inCost').value) || 0,
     odo: parseInt($('#inOdo').value) || 0,
@@ -871,18 +875,42 @@ function nowHM(){
   const d = new Date();
   return String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');
 }
-// 현재 시각 추적: 시계 표시 + 입력 폼의 날짜/종료시간을 접속 시각으로 유지
+/* 시작시간: 시(0~23)·분(10분 단위) 셀렉트 — 24시간 표기 */
+(function initTimeSelects(){
+  $('#inStartH').innerHTML = Array.from({length:24},(_,h)=>`<option value="${h}">${String(h).padStart(2,'0')}시</option>`).join('');
+  $('#inStartM').innerHTML = [0,10,20,30,40,50].map(m=>`<option value="${m}">${String(m).padStart(2,'0')}분</option>`).join('');
+})();
+function getStartVal(){
+  return String($('#inStartH').value).padStart(2,'0')+':'+String($('#inStartM').value).padStart(2,'0');
+}
+function setStartSel(hm){ // 'HH:MM' → 셀렉트 반영 (10분 단위가 아니면 임시 옵션 추가)
+  const [h,m] = hm.split(':').map(Number);
+  $('#inStartH').value = h;
+  const selM = $('#inStartM');
+  if(![...selM.options].some(o=>+o.value===m)){
+    const opt = document.createElement('option');
+    opt.value = m; opt.textContent = String(m).padStart(2,'0')+'분';
+    selM.appendChild(opt);
+  }
+  selM.value = m;
+}
+function nowRounded(){ // 현재 시각을 10분 단위로 반올림
+  const d = new Date();
+  let h = d.getHours(), m = Math.round(d.getMinutes()/10)*10;
+  if(m===60){ m=0; h=(h+1)%24; }
+  return String(h).padStart(2,'0')+':'+String(m).padStart(2,'0');
+}
+// 현재 시각 추적: 시계 표시 + 입력 폼의 날짜/시작시간을 접속 시각으로 유지
 function tickNow(){
-  const hm = nowHM();
-  $('#nowClock').textContent = hm;
+  $('#nowClock').textContent = nowHM();
   if(editId) return;
   if(!dateTouched){
     const t = todayStr();
     if($('#inDate').value !== t){ $('#inDate').value = t; autoHoliday(); }
   }
-  if(!startTouched && $('#inStart').value !== hm){
-    $('#inStart').value = hm;
-    updatePreview();
+  if(!startTouched){
+    const hm = nowRounded();
+    if(getStartVal() !== hm){ setStartSel(hm); updatePreview(); }
   }
 }
 setInterval(tickNow, 10000);
@@ -923,7 +951,6 @@ function updatePreview(){
   } else { cp.textContent='-'; cs.textContent='충전량만 입력하면 종료시간·요금이 자동 계산됩니다'; }
 }
 $('#inDate').addEventListener('input', (e)=>{ if(e.isTrusted) dateTouched=true; autoHoliday(); updatePreview(); });
-$('#inStart').addEventListener('input', (e)=>{ if(e.isTrusted) startTouched=true; updatePreview(); });
 $('#inKwh').addEventListener('input', updatePreview);
 $('#inCost').addEventListener('input', updatePreview);
 // 탭탭탭 빠른 입력: 충전량 → 시간 → 계기판 → 저장
@@ -933,11 +960,18 @@ function jumpTo(el){
   el.scrollIntoView({block:'center', behavior:'smooth'});
 }
 $('#inKwh').addEventListener('keydown', e=>{
-  if(e.key==='Enter'){ e.preventDefault(); jumpTo($('#inStart')); }
+  if(e.key==='Enter'){ e.preventDefault(); jumpTo($('#inStartH')); }
 });
-$('#inStart').addEventListener('change', ()=>{ jumpTo($('#inOdo')); });
-$('#inStart').addEventListener('keydown', e=>{
-  if(e.key==='Enter'){ e.preventDefault(); jumpTo($('#inOdo')); }
+// 시 고르면 → 분으로, 분까지 고르면(=완료) → 계기판으로
+$('#inStartH').addEventListener('change', (e)=>{
+  if(e.isTrusted) startTouched=true;
+  updatePreview();
+  if(e.isTrusted) jumpTo($('#inStartM'));
+});
+$('#inStartM').addEventListener('change', (e)=>{
+  if(e.isTrusted) startTouched=true;
+  updatePreview();
+  if(e.isTrusted) jumpTo($('#inOdo'));
 });
 $('#inOdo').addEventListener('keydown', e=>{
   if(e.key==='Enter'){ e.preventDefault(); jumpTo($('#btnSave')); }
@@ -978,7 +1012,7 @@ $('#btnSave').onclick = ()=>{
 function resetForm(){
   $('#inDate').value = todayStr();
   ['inKwh','inCost','inOdo'].forEach(id=> $('#'+id).value='');
-  $('#inStart').value = nowHM();
+  setStartSel(nowRounded());
   editId = null;
   startTouched = false;
   dateTouched = false;
@@ -997,7 +1031,7 @@ function editRec(id){
   editId = id;
   startTouched = true; dateTouched = true; // 수정 중엔 현재시각으로 덮어쓰지 않음
   $('#inDate').value = r.date;
-  $('#inStart').value = r.start||'';
+  if(r.start) setStartSel(r.start);
   $('#inKwh').value = r.kwh;
   $('#inCost').value = r.mode==='super'? r.cost : '';
   $('#inOdo').value = r.odo||'';
