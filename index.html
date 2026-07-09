@@ -400,6 +400,14 @@ const SEED7 = [
   {id:'s2607-04', date:'2026-07-07', start:'13:00', end:'16:26', kwh:24, seg:{light:0,mid:0,max:24}, cost:6221, odo:6567, hol:false},
   {id:'s2607-05', date:'2026-07-07', start:'18:00', end:'18:34', kwh:4,  seg:{light:0,mid:4,max:0},  cost:688,  odo:6567, hol:false},
 ].map(r=> Object.assign({mode:'normal', car:'m3'}, r));
+// 2026년 6~7월 과거 데이터 (모델 Y)
+const SEEDY = [
+  {id:'sy2606-01', date:'2026-06-05', start:'09:00', end:'14:17', kwh:37, seg:{light:0,mid:21,max:16}, cost:7759, odo:3000, hol:false},
+  {id:'sy2606-02', date:'2026-06-14', start:'18:00', end:'22:09', kwh:29, seg:{light:29,mid:0,max:0},  cost:2445, odo:3160, hol:true},
+  {id:'sy2606-03', date:'2026-06-21', start:'18:00', end:'22:26', kwh:31, seg:{light:31,mid:0,max:0},  cost:2613, odo:3346, hol:true},
+  {id:'sy2606-04', date:'2026-06-26', start:'18:00', end:'22:34', kwh:32, seg:{light:4,mid:28,max:0},  cost:5153, odo:3488, hol:false},
+  {id:'sy2607-01', date:'2026-07-06', start:'19:00', end:'00:09', kwh:36, seg:{light:36,mid:0,max:0},  cost:3035, odo:3644, hol:false},
+].map(r=> Object.assign({mode:'normal', car:'my'}, r));
 let DB = load();
 // 과거 데이터 1회 자동 주입 (이미 있으면 건너뜀)
 if(!DB.settings.seeded2606){
@@ -415,6 +423,12 @@ if(!DB.settings.seeded2607){
   const r630 = DB.records.find(r=>r.id==='s2606-26');
   if(r630 && r630.odo===6282) r630.odo = 6313;
   DB.settings.seeded2607 = true;
+  save();
+}
+if(!DB.settings.seededY1){
+  const have = new Set(DB.records.map(r=>r.id));
+  SEEDY.forEach(r=>{ if(!have.has(r.id)) DB.records.push(r); });
+  DB.settings.seededY1 = true;
   save();
 }
 function load(){
