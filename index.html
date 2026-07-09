@@ -14,7 +14,7 @@
   --border:rgba(11,11,11,0.10);
   --series-1:#2a78d6; --series-2:#1baf7a;
   --accent:#2a78d6; --accent-soft:rgba(42,120,214,0.10);
-  --good:#006300; --danger:#d03b3b;
+  --good:#006300; --danger:#d03b3b; --amber:#a06a00;
 }
 :root[data-theme="dark"]{
   --surface-1:#1a1a19; --page:#0d0d0d;
@@ -23,7 +23,7 @@
   --border:rgba(255,255,255,0.10);
   --series-1:#3987e5; --series-2:#199e70;
   --accent:#3987e5; --accent-soft:rgba(57,135,229,0.15);
-  --good:#0ca30c; --danger:#e66767;
+  --good:#0ca30c; --danger:#e66767; --amber:#eda100;
 }
 @media (prefers-color-scheme: dark){
   :root:not([data-theme="light"]){
@@ -33,7 +33,7 @@
     --border:rgba(255,255,255,0.10);
     --series-1:#3987e5; --series-2:#199e70;
     --accent:#3987e5; --accent-soft:rgba(57,135,229,0.15);
-    --good:#0ca30c; --danger:#e66767;
+    --good:#0ca30c; --danger:#e66767; --amber:#eda100;
   }
 }
 *{margin:0;padding:0;box-sizing:border-box}
@@ -161,6 +161,18 @@ table.rates th{font-weight:600;color:var(--ink-3);padding:4px;text-align:center;
 table.rates td{padding:3px}
 table.rates td:first-child{color:var(--ink-2);white-space:nowrap;padding-right:8px}
 table.rates input{padding:8px;text-align:right;font-size:14px;font-variant-numeric:tabular-nums}
+
+/* ---- 계산 기준 ---- */
+.rule-title{font-size:13.5px;color:var(--ink-3);line-height:1.6}
+.rule-sec{font-size:13.5px;font-weight:700;color:var(--ink-1);margin-top:16px;padding-top:14px;border-top:1px solid var(--grid)}
+.rule-row{display:flex;align-items:center;gap:10px;margin-top:8px;font-size:14.5px;color:var(--ink-2)}
+.rule-row .chip{
+  flex:0 0 84px;text-align:center;font-size:13px;font-weight:700;padding:5px 0;border-radius:9px;
+  background:var(--page);border:1px solid var(--border);color:var(--ink-2);
+}
+.rule-row .chip.light{background:rgba(27,175,122,.14);color:var(--series-2);border-color:transparent}
+.rule-row .chip.mid{background:rgba(201,133,0,.16);color:var(--amber);border-color:transparent}
+.rule-row .chip.max{background:rgba(227,73,72,.14);color:var(--danger);border-color:transparent}
 
 /* ---- tabs ---- */
 nav.tabs{
@@ -399,14 +411,26 @@ nav.tabs button.on{color:var(--accent)}
   </div>
 
   <div class="card">
-    <h2>계산 기준 — 한전 전기차 충전전력요금(자가소비용) 저압, 전력량요금만</h2>
-    <div style="font-size:12.5px;color:var(--ink-2);line-height:1.7">
-      <b>여름/봄가을</b> · 경부하 22~08시 · 중간부하 08~11, 12~13, 18~22시 · 최대부하 11~12, 13~18시<br>
-      <b>겨울</b> · 경부하 22~08시 · 중간부하 08~09, 12~16, 19~22시 · 최대부하 09~12, 16~19시<br>
-      <b>토요일</b> · 최대부하 → 중간부하 요금 적용<br>
-      <b>일요일·법정공휴일</b> · 전시간 경부하 (2026~27년 공휴일 자동 인식)<br>
-      <span style="color:var(--ink-3)">계절 자동 판정: 여름 6~8월 · 겨울 11~2월 · 나머지 봄가을 / 종료시간 = 시작 + 충전량÷충전기출력</span>
-    </div>
+    <h2>계산 기준</h2>
+    <div class="rule-title">한전 전기차 충전전력요금(자가소비용) · 저압 · 전력량요금만 계산</div>
+
+    <div class="rule-sec">여름 · 봄가을 시간대</div>
+    <div class="rule-row"><span class="chip light">경부하</span><span>22:00 ~ 08:00</span></div>
+    <div class="rule-row"><span class="chip mid">중간부하</span><span>08~11시 · 12~13시 · 18~22시</span></div>
+    <div class="rule-row"><span class="chip max">최대부하</span><span>11~12시 · 13~18시</span></div>
+
+    <div class="rule-sec">겨울 시간대</div>
+    <div class="rule-row"><span class="chip light">경부하</span><span>22:00 ~ 08:00</span></div>
+    <div class="rule-row"><span class="chip mid">중간부하</span><span>08~09시 · 12~16시 · 19~22시</span></div>
+    <div class="rule-row"><span class="chip max">최대부하</span><span>09~12시 · 16~19시</span></div>
+
+    <div class="rule-sec">요일 · 공휴일 규칙</div>
+    <div class="rule-row"><span class="chip">토요일</span><span>최대부하 → 중간부하 요금으로</span></div>
+    <div class="rule-row"><span class="chip">일·공휴일</span><span>전시간 경부하 (2026~27년 자동 인식)</span></div>
+
+    <div class="rule-sec">자동 계산</div>
+    <div class="rule-row"><span class="chip">계절</span><span>여름 6~8월 · 겨울 11~2월 · 나머지 봄가을</span></div>
+    <div class="rule-row"><span class="chip">종료시간</span><span>시작 + 충전량 ÷ 충전기 출력</span></div>
   </div>
 </section>
 
@@ -433,7 +457,7 @@ nav.tabs button.on{color:var(--accent)}
 
 <script>
 'use strict';
-const APP_VER = '18 (2026-07-09)';
+const APP_VER = '19 (2026-07-09)';
 // 주의: 아래 두 선언은 시드 주입(save 호출)보다 반드시 먼저 와야 함
 const BACKUP_URL = 'https://script.google.com/macros/s/AKfycbyJUA-w8falwPZa0uOmKND2MlHkfh4L2RoDwg4IAvw51X5BEnNscW-QPFgE6aBJzvv75g/exec'; // 구글시트 자동백업 (ho910830)
 let backupTimer = null;
@@ -448,6 +472,7 @@ window.addEventListener('error', function(ev){
   }catch(e){}
 });
 const CHANGELOG = [
+  ['v19','설정의 계산 기준을 보기 쉽게 정리'],
   ['v18','삭제 전 "정말로 삭제할까요?" 확인창 (아이폰에서 확인 없이 지워지던 문제 수정)'],
   ['v17','기기 간 자동 동기화 — 폰에서 넣은 기록이 PC에서도 보임 (구글시트 경유)'],
   ['v16','설정에 새로고침 버튼 · 아이폰 홈화면 앱에서 업데이트 배너 안 뜨던 문제 수정'],
