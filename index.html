@@ -113,6 +113,13 @@ header.app .carwrap .seg button.on{background:var(--accent);color:#fff}
 .chkrow{display:flex;align-items:center;gap:10px;margin-top:16px;font-size:16px;color:var(--ink-2);cursor:pointer;user-select:none}
 .chkrow input{width:21px;height:21px;accent-color:var(--accent);margin:0}
 .nowchip{font-weight:400;color:var(--ink-3);font-size:13px}
+.daterow{display:flex;gap:8px}
+.daterow input{flex:1;min-width:0}
+.dowbadge{
+  display:flex;align-items:center;padding:0 16px;border-radius:12px;white-space:nowrap;
+  background:var(--accent-soft);color:var(--accent);font-weight:700;font-size:17px;
+}
+.dowbadge.holiday{background:rgba(27,175,122,.15);color:var(--series-2)}
 .calc-preview{
   margin-top:16px;background:var(--accent-soft);border-radius:14px;padding:14px 16px;font-size:15px;
 }
@@ -286,15 +293,18 @@ nav.tabs button.on{color:var(--accent)}
       <button type="button" data-mode="super">슈퍼차저</button>
     </div>
 
-    <label class="f" for="inDate">날짜 <span class="nowchip" id="dateDow"></span></label>
-    <input type="date" id="inDate">
+    <label class="f" for="inDate">날짜</label>
+    <div class="daterow">
+      <input type="date" id="inDate">
+      <span class="dowbadge" id="dateDow"></span>
+    </div>
 
     <label class="f" for="inKwh">충전량 (kWh)</label>
-    <input type="number" id="inKwh" inputmode="decimal" step="0.1" min="0" placeholder="예: 22">
+    <input type="number" id="inKwh" inputmode="decimal" step="0.1" min="0" placeholder="예: 22" enterkeyhint="next">
 
     <div id="timeRow">
-      <label class="f" for="inEnd">종료 시간 <span class="nowchip">지금 <span id="nowClock">--:--</span> 자동 · 직접 수정 가능</span></label>
-      <input type="time" id="inEnd">
+      <label class="f" for="inStart">시작 시간 <span class="nowchip">지금 <span id="nowClock">--:--</span> 자동 · 직접 수정 가능</span></label>
+      <input type="time" id="inStart">
     </div>
 
 
@@ -304,7 +314,7 @@ nav.tabs button.on{color:var(--accent)}
     </div>
 
     <label class="f" for="inOdo">계기판 누적거리 (km) <span style="font-weight:400;color:var(--ink-3)">— 선택</span></label>
-    <input type="number" id="inOdo" inputmode="numeric" step="1" min="0" placeholder="예: 6313">
+    <input type="number" id="inOdo" inputmode="numeric" step="1" min="0" placeholder="예: 6313" enterkeyhint="done">
 
     <div class="calc-preview" id="calcPreview">
       <div class="big" id="cpCost">-</div>
@@ -333,7 +343,7 @@ nav.tabs button.on{color:var(--accent)}
   </div>
 
   <div class="card">
-    <h2>충전기 출력 (kW) — 시작시간 역산에 사용</h2>
+    <h2>충전기 출력 (kW) — 종료시간 계산에 사용</h2>
     <input type="number" id="inChargerKw" inputmode="decimal" step="0.1" min="1" placeholder="7">
   </div>
 
@@ -348,6 +358,7 @@ nav.tabs button.on{color:var(--accent)}
 
   <div class="card">
     <h2>데이터</h2>
+    <div id="backupStatus" style="font-size:13.5px;color:var(--ink-2);margin-bottom:12px">자동 백업: 확인 중</div>
     <button class="btn ghost" style="margin-top:0" id="btnCsv">CSV 내보내기 (엑셀용)</button>
     <button class="btn ghost" id="btnBackup">JSON 백업</button>
     <button class="btn ghost" id="btnRestore">JSON 복원</button>
@@ -373,7 +384,7 @@ nav.tabs button.on{color:var(--accent)}
       <b>겨울</b> · 경부하 22~08시 · 중간부하 08~09, 12~16, 19~22시 · 최대부하 09~12, 16~19시<br>
       <b>토요일</b> · 최대부하 → 중간부하 요금 적용<br>
       <b>일요일·법정공휴일</b> · 전시간 경부하 (2026~27년 공휴일 자동 인식)<br>
-      <span style="color:var(--ink-3)">계절 자동 판정: 여름 6~8월 · 겨울 11~2월 · 나머지 봄가을 / 시작시간 = 종료 − 충전량÷충전기출력</span>
+      <span style="color:var(--ink-3)">계절 자동 판정: 여름 6~8월 · 겨울 11~2월 · 나머지 봄가을 / 종료시간 = 시작 + 충전량÷충전기출력</span>
     </div>
   </div>
 </section>
@@ -391,8 +402,9 @@ nav.tabs button.on{color:var(--accent)}
 
 <script>
 'use strict';
-const APP_VER = '11 (2026-07-09)';
+const APP_VER = '12 (2026-07-09)';
 const CHANGELOG = [
+  ['v12','구글시트 자동 백업 · 요일 크게 표시 · 탭탭탭 빠른 입력 · 시작시간 기준 복귀'],
   ['v11','업데이트 알림 배너 · 업데이트 내역 · 접속 기록(IP/환경)'],
   ['v10','공휴일·일요일 완전 자동 판정(체크박스 제거) · 날짜에 요일 표시'],
   ['v9','계기판 마지막 값 힌트 · 평균단가 줄바꿈 정리'],
@@ -494,7 +506,35 @@ function load(){
   d.records.forEach(r=>{ if(!r.car) r.car='m3'; });
   return d;
 }
-function save(){ try{ localStorage.setItem(LS_KEY, JSON.stringify(DB)); }catch(e){} }
+function save(){ try{ localStorage.setItem(LS_KEY, JSON.stringify(DB)); }catch(e){} cloudBackup(); }
+
+/* ==================== 자동 백업 (구글 시트) ==================== */
+const BACKUP_URL = 'https://script.google.com/macros/s/AKfycbw02JZTdMm4M8HqfC5eFm3Rs9F-BaVew3dk1UNLVAGoxS_MzvZ3AvGTFQNMmRuTxj5vng/exec'; // 구글시트 자동백업
+let backupTimer = null;
+function cloudBackup(){
+  if(!BACKUP_URL) return;
+  clearTimeout(backupTimer);
+  backupTimer = setTimeout(()=>{
+    const rows = DB.records.slice()
+      .sort((a,b)=>(a.car+a.date+(a.start||''))<(b.car+b.date+(b.start||''))?-1:1)
+      .map(r=>[CAR_NAME[r.car]||r.car, r.date, dowOf(r.date), r.start||'-', r.end||'-', r.kwh,
+               segLabel(r), r.cost, Math.round(r.cost/r.kwh*10)/10, r.odo||'', r.mode==='super'?'슈퍼차저':'일반']);
+    fetch(BACKUP_URL, {method:'POST', mode:'no-cors', body: JSON.stringify({device:envSummary(), db:DB, rows:rows})})
+      .then(()=>{
+        const n = new Date();
+        DB.settings.lastBackup = `${n.getFullYear()}-${String(n.getMonth()+1).padStart(2,'0')}-${String(n.getDate()).padStart(2,'0')} ${nowHM()}`;
+        try{ localStorage.setItem(LS_KEY, JSON.stringify(DB)); }catch(e){}
+        renderBackupStatus();
+      }).catch(()=>{});
+  }, 1500);
+}
+function renderBackupStatus(){
+  const el = document.getElementById('backupStatus');
+  if(!el) return;
+  el.textContent = BACKUP_URL
+    ? `자동 백업: 구글시트 연결됨${DB.settings.lastBackup? ' · 마지막 '+DB.settings.lastBackup : ''}`
+    : '자동 백업: 설정 안 됨';
+}
 
 /* ==================== 공휴일 (2026~2027 대체공휴일 포함) ==================== */
 const HOLIDAYS = new Set([
@@ -587,7 +627,7 @@ function toast(msg){
 let curMonth = todayStr().slice(0,7); // 'YYYY-MM'
 let editId = null;
 let formMode = 'normal';
-let endTouched = false; // 종료시간을 직접 고쳤으면 현재시각 자동갱신 중단
+let startTouched = false; // 시작시간을 직접 고쳤으면 현재시각 자동갱신 중단
 let dateTouched = false;
 
 /* ==================== 테마 / 차량 ==================== */
@@ -813,18 +853,18 @@ document.querySelectorAll('#modeSeg button').forEach(b=> b.onclick = ()=>setForm
 function readForm(){
   return {
     date: $('#inDate').value,
-    end: $('#inEnd').value,
+    start: $('#inStart').value,
     kwh: parseFloat($('#inKwh').value) || 0,
     cost: parseInt($('#inCost').value) || 0,
     odo: parseInt($('#inOdo').value) || 0,
     hol: $('#inDate').value ? isAllLightAuto($('#inDate').value) : false,
   };
 }
-// 시작시간 = 종료 - 충전량 ÷ 충전기출력(kW) — 종료시간에서 역산
-function calcStart(end, kwh){
+// 종료시간 = 시작 + 충전량 ÷ 충전기출력(kW)
+function calcEnd(start, kwh){
   const kw = DB.settings.chargerKw || 7;
-  const s = (toMin(end) - Math.round(kwh/kw*60) + 2880) % 1440;
-  return String(Math.floor(s/60)).padStart(2,'0')+':'+String(s%60).padStart(2,'0');
+  const e = (toMin(start) + Math.round(kwh/kw*60)) % 1440;
+  return String(Math.floor(e/60)).padStart(2,'0')+':'+String(e%60).padStart(2,'0');
 }
 function nowHM(){
   const d = new Date();
@@ -839,19 +879,22 @@ function tickNow(){
     const t = todayStr();
     if($('#inDate').value !== t){ $('#inDate').value = t; autoHoliday(); }
   }
-  if(!endTouched && $('#inEnd').value !== hm){
-    $('#inEnd').value = hm;
+  if(!startTouched && $('#inStart').value !== hm){
+    $('#inStart').value = hm;
     updatePreview();
   }
 }
 setInterval(tickNow, 10000);
 // 폰에서 앱을 다시 열었을 때도 즉시 현재 시각으로 + 새 버전 확인
 document.addEventListener('visibilitychange', ()=>{ if(!document.hidden){ tickNow(); checkUpdate(); } });
-// 날짜 옆에 요일 표시 (일요일·공휴일이면 경부하 자동 적용 안내)
+// 날짜 옆 요일 배지 (일요일·공휴일이면 경부하 자동 적용 표시)
 function autoHoliday(){
   const d = $('#inDate').value;
-  if(!d){ $('#dateDow').textContent = ''; return; }
-  $('#dateDow').textContent = dowOf(d) + (isAllLightAuto(d) ? ' · 공휴일이라 전시간 경부하 적용' : '');
+  const badge = $('#dateDow');
+  if(!d){ badge.textContent = ''; badge.classList.remove('holiday'); return; }
+  const hol = isAllLightAuto(d);
+  badge.textContent = dowOf(d) + (hol ? ' · 경부하' : '');
+  badge.classList.toggle('holiday', hol);
 }
 // 선택된 차량의 마지막 계기판 값을 입력칸 힌트로 표시
 function updateOdoHint(){
@@ -870,18 +913,34 @@ function updatePreview(){
     } else { cp.textContent='-'; cs.textContent='충전량과 총 요금을 입력하세요'; }
     return;
   }
-  if(f.date && f.end && f.kwh>0){
-    const start = calcStart(f.end, f.kwh);
-    const r = splitCharge(f.date, start, f.end, f.kwh, f.hol);
+  if(f.date && f.start && f.kwh>0){
+    const end = calcEnd(f.start, f.kwh);
+    const r = splitCharge(f.date, f.start, end, f.kwh, f.hol);
     cp.textContent = fmt(r.cost)+'원';
-    cs.innerHTML = `시작 예상 ${start} ~ ${f.end} · ${dowOf(f.date)} · ${SEASON_NAME[r.season]}<br>`+
+    cs.innerHTML = `${f.start} ~ ${end} 종료 예상 · ${dowOf(f.date)} · ${SEASON_NAME[r.season]}<br>`+
       segLabel({mode:'normal', seg:r.seg})+` · 평균단가 ${fmt(r.cost/f.kwh)}원/kWh`;
-  } else { cp.textContent='-'; cs.textContent='충전량만 입력하면 시작시간·요금이 자동 계산됩니다'; }
+  } else { cp.textContent='-'; cs.textContent='충전량만 입력하면 종료시간·요금이 자동 계산됩니다'; }
 }
 $('#inDate').addEventListener('input', (e)=>{ if(e.isTrusted) dateTouched=true; autoHoliday(); updatePreview(); });
-$('#inEnd').addEventListener('input', (e)=>{ if(e.isTrusted) endTouched=true; updatePreview(); });
+$('#inStart').addEventListener('input', (e)=>{ if(e.isTrusted) startTouched=true; updatePreview(); });
 $('#inKwh').addEventListener('input', updatePreview);
 $('#inCost').addEventListener('input', updatePreview);
+// 탭탭탭 빠른 입력: 충전량 → 시간 → 계기판 → 저장
+function jumpTo(el){
+  el.focus();
+  if(el.select) try{ el.select(); }catch(e){}
+  el.scrollIntoView({block:'center', behavior:'smooth'});
+}
+$('#inKwh').addEventListener('keydown', e=>{
+  if(e.key==='Enter'){ e.preventDefault(); jumpTo($('#inStart')); }
+});
+$('#inStart').addEventListener('change', ()=>{ jumpTo($('#inOdo')); });
+$('#inStart').addEventListener('keydown', e=>{
+  if(e.key==='Enter'){ e.preventDefault(); jumpTo($('#inOdo')); }
+});
+$('#inOdo').addEventListener('keydown', e=>{
+  if(e.key==='Enter'){ e.preventDefault(); jumpTo($('#btnSave')); }
+});
 
 $('#btnSave').onclick = ()=>{
   const f = readForm();
@@ -892,10 +951,10 @@ $('#btnSave').onclick = ()=>{
     if(f.cost<=0){ toast('총 요금을 입력하세요'); return; }
     rec = {mode:'super', car:DB.settings.car, date:f.date, start:'', end:'', kwh:f.kwh, seg:null, cost:f.cost, odo:f.odo, hol:false};
   } else {
-    if(!f.end){ toast('종료 시간을 입력하세요'); return; }
-    const start = calcStart(f.end, f.kwh);
-    const r = splitCharge(f.date, start, f.end, f.kwh, f.hol);
-    rec = {mode:'normal', car:DB.settings.car, date:f.date, start:start, end:f.end, kwh:f.kwh, seg:r.seg, cost:r.cost, odo:f.odo, hol:f.hol};
+    if(!f.start){ toast('시작 시간을 입력하세요'); return; }
+    const end = calcEnd(f.start, f.kwh);
+    const r = splitCharge(f.date, f.start, end, f.kwh, f.hol);
+    rec = {mode:'normal', car:DB.settings.car, date:f.date, start:f.start, end:end, kwh:f.kwh, seg:r.seg, cost:r.cost, odo:f.odo, hol:f.hol};
   }
   if(editId){
     const i = DB.records.findIndex(x=>x.id===editId);
@@ -918,9 +977,9 @@ $('#btnSave').onclick = ()=>{
 function resetForm(){
   $('#inDate').value = todayStr();
   ['inKwh','inCost','inOdo'].forEach(id=> $('#'+id).value='');
-  $('#inEnd').value = nowHM();
+  $('#inStart').value = nowHM();
   editId = null;
-  endTouched = false;
+  startTouched = false;
   dateTouched = false;
   autoHoliday();
   updateOdoHint();
@@ -935,9 +994,9 @@ function editRec(id){
   const r = DB.records.find(x=>x.id===id);
   if(!r) return;
   editId = id;
-  endTouched = true; dateTouched = true; // 수정 중엔 현재시각으로 덮어쓰지 않음
+  startTouched = true; dateTouched = true; // 수정 중엔 현재시각으로 덮어쓰지 않음
   $('#inDate').value = r.date;
-  $('#inEnd').value = r.end||'';
+  $('#inStart').value = r.start||'';
   $('#inKwh').value = r.kwh;
   $('#inCost').value = r.mode==='super'? r.cost : '';
   $('#inOdo').value = r.odo||'';
@@ -1112,6 +1171,8 @@ $('#appVer').textContent = APP_VER;
 $('#chLog').innerHTML = CHANGELOG.map(c=>`<div><b style="color:var(--ink-1)">${c[0]}</b> — ${c[1]}</div>`).join('');
 logVisit();
 checkUpdate();
+renderBackupStatus();
+cloudBackup(); // 앱 열 때마다 한 번 백업
 </script>
 </body>
 </html>
