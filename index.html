@@ -179,6 +179,19 @@ nav.tabs button.on{color:var(--accent)}
 .page-sec{display:none}
 .page-sec.on{display:block}
 
+.modal{
+  position:fixed;inset:0;z-index:70;display:none;align-items:center;justify-content:center;
+  background:rgba(0,0,0,.55);padding:24px;
+}
+.modal.show{display:flex}
+.mbox{background:var(--surface-1);border:1px solid var(--border);border-radius:18px;padding:22px 20px;max-width:340px;width:100%}
+.mtext{font-size:17px;font-weight:600;line-height:1.5;text-align:center;word-break:keep-all}
+.mbtns{display:flex;gap:10px;margin-top:18px}
+.mbtns button{
+  flex:1;padding:14px 0;border:1px solid var(--border);border-radius:12px;
+  background:transparent;color:var(--ink-2);font-size:16px;font-weight:700;cursor:pointer;font-family:inherit;
+}
+.mbtns button.mok{background:var(--danger);border-color:transparent;color:#fff}
 .updbar{
   position:fixed;top:0;left:0;right:0;z-index:60;display:none;align-items:center;justify-content:center;gap:14px;
   background:var(--accent);color:#fff;padding:11px;font-size:15px;font-weight:600;
@@ -408,9 +421,19 @@ nav.tabs button.on{color:var(--accent)}
 
 <div class="toast" id="toast"></div>
 
+<div class="modal" id="confirmModal">
+  <div class="mbox">
+    <div class="mtext" id="confirmText">정말로 삭제할까요?</div>
+    <div class="mbtns">
+      <button type="button" id="mCancel">취소</button>
+      <button type="button" class="mok" id="mOk">삭제</button>
+    </div>
+  </div>
+</div>
+
 <script>
 'use strict';
-const APP_VER = '17 (2026-07-09)';
+const APP_VER = '18 (2026-07-09)';
 // 주의: 아래 두 선언은 시드 주입(save 호출)보다 반드시 먼저 와야 함
 const BACKUP_URL = 'https://script.google.com/macros/s/AKfycbyJUA-w8falwPZa0uOmKND2MlHkfh4L2RoDwg4IAvw51X5BEnNscW-QPFgE6aBJzvv75g/exec'; // 구글시트 자동백업 (ho910830)
 let backupTimer = null;
@@ -425,6 +448,7 @@ window.addEventListener('error', function(ev){
   }catch(e){}
 });
 const CHANGELOG = [
+  ['v18','삭제 전 "정말로 삭제할까요?" 확인창 (아이폰에서 확인 없이 지워지던 문제 수정)'],
   ['v17','기기 간 자동 동기화 — 폰에서 넣은 기록이 PC에서도 보임 (구글시트 경유)'],
   ['v16','설정에 새로고침 버튼 · 아이폰 홈화면 앱에서 업데이트 배너 안 뜨던 문제 수정'],
   ['v15','저장 오류 자동 감지·수집 추가'],
@@ -664,6 +688,17 @@ const fmt = n => Math.round(n).toLocaleString('ko-KR');
 const fmtN = n => (Math.round(n*10)/10).toLocaleString('ko-KR');
 function dowOf(dateStr){ return DOW[new Date(dateStr+'T00:00:00').getDay()]; }
 function todayStr(){ const d=new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
+// 앱 자체 확인창 (아이폰 홈화면 앱에서 confirm()이 안 떠서 자체 구현)
+let confirmCb = null;
+function askConfirm(text, okLabel, onOk){
+  $('#confirmText').textContent = text;
+  $('#mOk').textContent = okLabel;
+  confirmCb = onOk;
+  $('#confirmModal').classList.add('show');
+}
+$('#mCancel').onclick = ()=>{ confirmCb=null; $('#confirmModal').classList.remove('show'); };
+$('#mOk').onclick = ()=>{ const cb=confirmCb; confirmCb=null; $('#confirmModal').classList.remove('show'); if(cb) cb(); };
+$('#confirmModal').addEventListener('click', (e)=>{ if(e.target.id==='confirmModal'){ confirmCb=null; $('#confirmModal').classList.remove('show'); } });
 function toast(msg){
   const t = $('#toast'); t.textContent = msg; t.classList.add('show');
   clearTimeout(toast._t); toast._t = setTimeout(()=>t.classList.remove('show'), 1800);
@@ -1096,10 +1131,11 @@ function editRec(id){
 function delRec(id){
   const r = DB.records.find(x=>x.id===id);
   if(!r) return;
-  if(!confirm(`${r.date} ${fmtN(r.kwh)}kWh 기록을 삭제할까요?`)) return;
-  DB.records = DB.records.filter(x=>x.id!==id);
-  DB.deleted.push(id); // 다른 기기에서 동기화로 되살아나지 않게 기록
-  save(); renderAll(); toast('삭제되었습니다');
+  askConfirm(`${r.date.slice(5).replace('-','/')} ${fmtN(r.kwh)}kWh · ${fmt(r.cost)}원 기록을 정말로 삭제할까요?`, '삭제', ()=>{
+    DB.records = DB.records.filter(x=>x.id!==id);
+    DB.deleted.push(id); // 다른 기기에서 동기화로 되살아나지 않게 기록
+    save(); renderAll(); toast('삭제되었습니다');
+  });
 }
 
 /* ==================== 기록 목록 ==================== */
@@ -1182,9 +1218,10 @@ $('#fileRestore').onchange = (e)=>{
   e.target.value='';
 };
 $('#btnWipe').onclick = ()=>{
-  if(!confirm('모든 기록과 설정을 삭제할까요?\n(백업을 먼저 받아두는 것을 추천합니다)')) return;
-  localStorage.removeItem(LS_KEY);
-  DB = load(); applyTheme(); applyCar(); renderAll(); renderRates(); toast('초기화되었습니다');
+  askConfirm('이 기기의 모든 기록과 설정을 정말로 삭제할까요? (구글시트 백업은 남아있습니다)', '전체 삭제', ()=>{
+    localStorage.removeItem(LS_KEY);
+    DB = load(); applyTheme(); applyCar(); renderAll(); renderRates(); toast('초기화되었습니다');
+  });
 };
 function download(blob, name){
   const a = document.createElement('a');
