@@ -402,8 +402,9 @@ nav.tabs button.on{color:var(--accent)}
 
 <script>
 'use strict';
-const APP_VER = '12 (2026-07-09)';
+const APP_VER = '13 (2026-07-09)';
 const CHANGELOG = [
+  ['v13','자동 백업 계정을 ho910830 구글시트로 이전'],
   ['v12','구글시트 자동 백업 · 요일 크게 표시 · 탭탭탭 빠른 입력 · 시작시간 기준 복귀'],
   ['v11','업데이트 알림 배너 · 업데이트 내역 · 접속 기록(IP/환경)'],
   ['v10','공휴일·일요일 완전 자동 판정(체크박스 제거) · 날짜에 요일 표시'],
@@ -509,7 +510,7 @@ function load(){
 function save(){ try{ localStorage.setItem(LS_KEY, JSON.stringify(DB)); }catch(e){} cloudBackup(); }
 
 /* ==================== 자동 백업 (구글 시트) ==================== */
-const BACKUP_URL = 'https://script.google.com/macros/s/AKfycbw02JZTdMm4M8HqfC5eFm3Rs9F-BaVew3dk1UNLVAGoxS_MzvZ3AvGTFQNMmRuTxj5vng/exec'; // 구글시트 자동백업
+const BACKUP_URL = 'https://script.google.com/macros/s/AKfycbyJUA-w8falwPZa0uOmKND2MlHkfh4L2RoDwg4IAvw51X5BEnNscW-QPFgE6aBJzvv75g/exec'; // 구글시트 자동백업 (ho910830)
 let backupTimer = null;
 function cloudBackup(){
   if(!BACKUP_URL) return;
