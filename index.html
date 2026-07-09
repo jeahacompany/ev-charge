@@ -275,7 +275,7 @@ nav.tabs button.on{color:var(--accent)}
       <button type="button" data-mode="super">슈퍼차저</button>
     </div>
 
-    <label class="f" for="inDate">날짜</label>
+    <label class="f" for="inDate">날짜 <span class="nowchip" id="dateDow"></span></label>
     <input type="date" id="inDate">
 
     <label class="f" for="inKwh">충전량 (kWh)</label>
@@ -286,7 +286,6 @@ nav.tabs button.on{color:var(--accent)}
       <input type="time" id="inEnd">
     </div>
 
-    <label class="chkrow" id="holRow"><input type="checkbox" id="inHoliday"> 공휴일·일요일 (전시간 경부하)</label>
 
     <div id="superCostRow" class="hidden">
       <label class="f" for="inCost">총 요금 (원)</label>
@@ -343,6 +342,7 @@ nav.tabs button.on{color:var(--accent)}
     <button class="btn ghost" id="btnRestore">JSON 복원</button>
     <input type="file" id="fileRestore" accept=".json" class="hidden">
     <button class="btn danger" id="btnWipe">전체 데이터 삭제</button>
+    <div style="text-align:center;margin-top:12px;font-size:12px;color:var(--ink-3)">버전 <span id="appVer"></span></div>
   </div>
 
   <div class="card">
@@ -351,7 +351,7 @@ nav.tabs button.on{color:var(--accent)}
       <b>여름/봄가을</b> · 경부하 22~08시 · 중간부하 08~11, 12~13, 18~22시 · 최대부하 11~12, 13~18시<br>
       <b>겨울</b> · 경부하 22~08시 · 중간부하 08~09, 12~16, 19~22시 · 최대부하 09~12, 16~19시<br>
       <b>토요일</b> · 최대부하 → 중간부하 요금 적용<br>
-      <b>일요일·법정공휴일</b> · 전시간 경부하 (2026~27년 공휴일 자동 인식, 입력 시 체크박스로 수정 가능)<br>
+      <b>일요일·법정공휴일</b> · 전시간 경부하 (2026~27년 공휴일 자동 인식)<br>
       <span style="color:var(--ink-3)">계절 자동 판정: 여름 6~8월 · 겨울 11~2월 · 나머지 봄가을 / 시작시간 = 종료 − 충전량÷충전기출력</span>
     </div>
   </div>
@@ -370,6 +370,7 @@ nav.tabs button.on{color:var(--accent)}
 
 <script>
 'use strict';
+const APP_VER = '10 (2026-07-09)';
 /* ==================== 데이터 ==================== */
 const LS_KEY = 'evChargeApp.v1';
 // 한전 전기차 충전전력요금(자가소비용) 저압 — 전력량요금
@@ -770,7 +771,6 @@ function setFormMode(mode){
   formMode = mode;
   document.querySelectorAll('#modeSeg button').forEach(b=>b.classList.toggle('on', b.dataset.mode===mode));
   $('#timeRow').classList.toggle('hidden', mode==='super');
-  $('#holRow').classList.toggle('hidden', mode==='super');
   $('#superCostRow').classList.toggle('hidden', mode!=='super');
   updatePreview();
 }
@@ -783,7 +783,7 @@ function readForm(){
     kwh: parseFloat($('#inKwh').value) || 0,
     cost: parseInt($('#inCost').value) || 0,
     odo: parseInt($('#inOdo').value) || 0,
-    hol: $('#inHoliday').checked,
+    hol: $('#inDate').value ? isAllLightAuto($('#inDate').value) : false,
   };
 }
 // 시작시간 = 종료 - 충전량 ÷ 충전기출력(kW) — 종료시간에서 역산
@@ -813,9 +813,11 @@ function tickNow(){
 setInterval(tickNow, 10000);
 // 폰에서 앱을 다시 열었을 때도 즉시 현재 시각으로
 document.addEventListener('visibilitychange', ()=>{ if(!document.hidden) tickNow(); });
+// 날짜 옆에 요일 표시 (일요일·공휴일이면 경부하 자동 적용 안내)
 function autoHoliday(){
   const d = $('#inDate').value;
-  if(d) $('#inHoliday').checked = isAllLightAuto(d);
+  if(!d){ $('#dateDow').textContent = ''; return; }
+  $('#dateDow').textContent = dowOf(d) + (isAllLightAuto(d) ? ' · 공휴일이라 전시간 경부하 적용' : '');
 }
 // 선택된 차량의 마지막 계기판 값을 입력칸 힌트로 표시
 function updateOdoHint(){
@@ -846,7 +848,6 @@ $('#inDate').addEventListener('input', (e)=>{ if(e.isTrusted) dateTouched=true; 
 $('#inEnd').addEventListener('input', (e)=>{ if(e.isTrusted) endTouched=true; updatePreview(); });
 $('#inKwh').addEventListener('input', updatePreview);
 $('#inCost').addEventListener('input', updatePreview);
-$('#inHoliday').addEventListener('change', updatePreview);
 
 $('#btnSave').onclick = ()=>{
   const f = readForm();
@@ -906,7 +907,7 @@ function editRec(id){
   $('#inKwh').value = r.kwh;
   $('#inCost').value = r.mode==='super'? r.cost : '';
   $('#inOdo').value = r.odo||'';
-  $('#inHoliday').checked = !!r.hol;
+  autoHoliday();
   DB.settings.car = r.car; save(); applyCar();
   setFormMode(r.mode);
   $('#formTitle').textContent = '기록 수정';
@@ -1032,6 +1033,7 @@ resetForm();
 renderRates();
 renderAll();
 tickNow();
+$('#appVer').textContent = APP_VER;
 </script>
 </body>
 </html>
