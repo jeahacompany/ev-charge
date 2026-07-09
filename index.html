@@ -405,8 +405,19 @@ nav.tabs button.on{color:var(--accent)}
 
 <script>
 'use strict';
-const APP_VER = '14 (2026-07-09)';
+const APP_VER = '15 (2026-07-09)';
+// 오류 원격 수집: 어떤 기기에서든 오류가 나면 다음 백업에 실려 시트로 올라옴
+window.addEventListener('error', function(ev){
+  try{
+    const raw = localStorage.getItem('evChargeApp.v1');
+    const d = raw ? JSON.parse(raw) : {records:[], settings:{}};
+    d.settings = d.settings || {};
+    d.settings.lastError = `[v${APP_VER}] ${new Date().toISOString()} ${ev.message} @${ev.filename}:${ev.lineno}`;
+    localStorage.setItem('evChargeApp.v1', JSON.stringify(d));
+  }catch(e){}
+});
 const CHANGELOG = [
+  ['v15','저장 오류 자동 감지·수집 추가'],
   ['v14','시작시간을 시·분(10분 단위) 선택으로 변경, 24시간 표기 · 분 선택하면 자동으로 다음 칸 이동'],
   ['v13','자동 백업 계정을 ho910830 구글시트로 이전'],
   ['v12','구글시트 자동 백업 · 요일 크게 표시 · 탭탭탭 빠른 입력 · 시작시간 기준 복귀'],
@@ -978,6 +989,15 @@ $('#inOdo').addEventListener('keydown', e=>{
 });
 
 $('#btnSave').onclick = ()=>{
+  try{ doSave(); }catch(err){
+    toast('저장 오류: '+err.message);
+    try{
+      DB.settings.lastError = `[v${APP_VER}] save: ${err.message}`;
+      localStorage.setItem(LS_KEY, JSON.stringify(DB));
+    }catch(e){}
+  }
+};
+function doSave(){
   const f = readForm();
   if(!f.date){ toast('날짜를 입력하세요'); return; }
   if(f.kwh<=0){ toast('충전량을 입력하세요'); return; }
@@ -1007,7 +1027,7 @@ $('#btnSave').onclick = ()=>{
   resetForm();
   renderAll();
   switchPage('dash');
-};
+}
 
 function resetForm(){
   $('#inDate').value = todayStr();
