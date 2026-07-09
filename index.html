@@ -63,19 +63,21 @@ header.app h1 .bolt{color:var(--series-1)}
 .hero .lb{font-size:14px;color:var(--ink-3)}
 .heroval{font-size:44px;font-weight:700;line-height:1.15;margin-top:4px}
 .heroval .un{font-size:19px;font-weight:400;color:var(--ink-3);margin-left:4px}
-.herosub{display:flex;gap:20px;margin-top:12px;font-size:15px;color:var(--ink-3)}
-.herosub b{color:var(--ink-1);font-weight:600;font-variant-numeric:tabular-nums}
+.herosub{display:grid;grid-template-columns:auto auto auto;justify-content:space-between;margin-top:14px}
+.herosub .sl{display:block;font-size:12.5px;color:var(--ink-3)}
+.herosub .sv{display:block;font-size:15px;color:var(--ink-3);white-space:nowrap;margin-top:1px}
+.herosub b{color:var(--ink-1);font-size:18px;font-weight:600;font-variant-numeric:tabular-nums}
 .tile{background:var(--surface-1);border:1px solid var(--border);border-radius:16px;padding:14px 16px}
 .tile .lb{font-size:14px;color:var(--ink-3)}
 .tile .vl{font-size:29px;font-weight:700;margin-top:2px}
 .tile .un{font-size:14px;font-weight:400;color:var(--ink-3);margin-left:3px}
 .split{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:16px}
-.split .card{margin-top:0}
+.split .card{margin-top:0;padding:14px}
 .split h2{display:flex;align-items:center;gap:6px}
 .swatch{width:12px;height:12px;border-radius:3px;display:inline-block}
-.split dl{display:grid;grid-template-columns:auto 1fr;row-gap:4px;column-gap:8px;font-size:15px}
-.split dt{color:var(--ink-3)}
-.split dd{text-align:right;font-weight:600;font-variant-numeric:tabular-nums}
+.split dl{display:grid;grid-template-columns:auto 1fr;row-gap:5px;column-gap:6px;font-size:14px}
+.split dt{color:var(--ink-3);white-space:nowrap}
+.split dd{text-align:right;font-weight:600;font-variant-numeric:tabular-nums;white-space:nowrap}
 
 /* ---- chart ---- */
 .chart-box{position:relative}
@@ -204,9 +206,9 @@ nav.tabs button.on{color:var(--accent)}
     <div class="lb">이번 달 충전요금</div>
     <div class="heroval" id="dCost">0<span class="un">원</span></div>
     <div class="herosub">
-      <span><b id="dCount">0</b>회</span>
-      <span><b id="dKwh">0</b> kWh</span>
-      <span>평균단가 <b id="dUnit">0</b>원/kWh</span>
+      <div><span class="sl">충전 횟수</span><span class="sv"><b id="dCount">0</b>회</span></div>
+      <div><span class="sl">충전량</span><span class="sv"><b id="dKwh">0</b> kWh</span></div>
+      <div><span class="sl">평균단가</span><span class="sv"><b id="dUnit">0</b>원/kWh</span></div>
     </div>
   </div>
 
@@ -567,7 +569,7 @@ function applyCar(){
   document.querySelectorAll('#carSeg button').forEach(b=>b.classList.toggle('on', b.dataset.car===DB.settings.car));
 }
 document.querySelectorAll('#carSeg button').forEach(b=> b.onclick = ()=>{
-  DB.settings.car = b.dataset.car; save(); applyCar(); renderAll();
+  DB.settings.car = b.dataset.car; save(); applyCar(); updateOdoHint(); renderAll();
 });
 
 /* ==================== 월 네비 ==================== */
@@ -815,6 +817,13 @@ function autoHoliday(){
   const d = $('#inDate').value;
   if(d) $('#inHoliday').checked = isAllLightAuto(d);
 }
+// 선택된 차량의 마지막 계기판 값을 입력칸 힌트로 표시
+function updateOdoHint(){
+  const odos = DB.records.filter(r=>r.car===DB.settings.car && r.odo>0)
+    .sort((a,b)=>a.date<b.date?-1:1);
+  const last = odos.length ? odos[odos.length-1].odo : 0;
+  $('#inOdo').placeholder = last ? `지난번 ${fmt(last)} km` : '예: 6313';
+}
 function updatePreview(){
   const f = readForm();
   const cp = $('#cpCost'), cs = $('#cpSeg');
@@ -879,6 +888,7 @@ function resetForm(){
   endTouched = false;
   dateTouched = false;
   autoHoliday();
+  updateOdoHint();
   $('#formTitle').textContent = '충전 기록 입력';
   $('#btnSave').textContent = '저장';
   $('#btnCancelEdit').classList.add('hidden');
