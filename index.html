@@ -206,7 +206,7 @@ nav.tabs button.on{color:var(--accent)}
     <div class="herosub">
       <span><b id="dCount">0</b>회</span>
       <span><b id="dKwh">0</b> kWh</span>
-      <span><b id="dUnit">0</b>원/kWh</span>
+      <span>평균단가 <b id="dUnit">0</b>원/kWh</span>
     </div>
   </div>
 
@@ -216,7 +216,7 @@ nav.tabs button.on{color:var(--accent)}
       <dl>
         <dt>충전량</dt><dd id="sNkwh">0 kWh</dd>
         <dt>요금</dt><dd id="sNcost">0원</dd>
-        <dt>단가</dt><dd id="sNunit">-</dd>
+        <dt>평균단가</dt><dd id="sNunit">-</dd>
       </dl>
     </div>
     <div class="card">
@@ -224,7 +224,7 @@ nav.tabs button.on{color:var(--accent)}
       <dl>
         <dt>충전량</dt><dd id="sSkwh">0 kWh</dd>
         <dt>요금</dt><dd id="sScost">0원</dd>
-        <dt>단가</dt><dd id="sSunit">-</dd>
+        <dt>평균단가</dt><dd id="sSunit">-</dd>
       </dl>
     </div>
   </div>
@@ -244,6 +244,20 @@ nav.tabs button.on{color:var(--accent)}
       <div class="empty" id="chartEmpty">이번 달 기록이 없습니다</div>
       <svg id="chartSvg" class="hidden" role="img" aria-label="일자별 충전량 차트"></svg>
       <div class="tooltip" id="chartTip"></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>월별 비교 <span style="font-weight:400;color:var(--ink-3)">· 막대를 누르면 그 달로 이동</span></h2>
+    <div class="seg" id="trendSeg" style="grid-template-columns:repeat(4,1fr)">
+      <button type="button" data-m="cost" class="on">요금</button>
+      <button type="button" data-m="kwh">충전량</button>
+      <button type="button" data-m="km">주행</button>
+      <button type="button" data-m="unit">평균단가</button>
+    </div>
+    <div class="chart-box" style="margin-top:14px">
+      <div class="empty hidden" id="trendEmpty">기록이 없습니다</div>
+      <svg id="trendSvg" role="img" aria-label="월별 비교 차트"></svg>
     </div>
   </div>
 </section>
@@ -590,20 +604,22 @@ function renderDash(){
   $('#sScost').textContent = fmt(grp.super.cost)+'원';
   $('#sSunit').textContent = grp.super.kwh? fmt(grp.super.cost/grp.super.kwh)+'원/kWh':'-';
 
-  // 주행거리: 이번 달 마지막 계기판 - (이전 기록의 마지막 계기판 || 이번 달 첫 계기판)
-  const odoRecs = DB.records.filter(r=>r.car===DB.settings.car && r.odo>0).sort((a,b)=>a.date<b.date?-1:1);
-  const inMonth = odoRecs.filter(r=>r.date.startsWith(curMonth));
-  const before = odoRecs.filter(r=>r.date < curMonth+'-01');
-  let km = null;
-  if(inMonth.length){
-    const last = inMonth[inMonth.length-1].odo;
-    const base = before.length ? before[before.length-1].odo : inMonth[0].odo;
-    if(last>base) km = last-base;
-  }
+  const km = monthKm(DB.settings.car, curMonth);
   $('#dKm').innerHTML = (km!=null? fmt(km):'-')+'<span class="un">km</span>';
   $('#dCostKm').innerHTML = (km? (Math.round(tot.cost/km*10)/10).toLocaleString('ko-KR'):'-')+'<span class="un">원/km</span>';
 
   renderChart(recs);
+  renderTrend();
+}
+// 해당 월 주행거리: 월 마지막 계기판 - (이전 기록의 마지막 계기판 || 월 첫 계기판)
+function monthKm(car, ym){
+  const odoRecs = DB.records.filter(r=>r.car===car && r.odo>0).sort((a,b)=>a.date<b.date?-1:1);
+  const inMonth = odoRecs.filter(r=>r.date.startsWith(ym));
+  if(!inMonth.length) return null;
+  const before = odoRecs.filter(r=>r.date < ym+'-01');
+  const last = inMonth[inMonth.length-1].odo;
+  const base = before.length ? before[before.length-1].odo : inMonth[0].odo;
+  return last>base ? last-base : null;
 }
 
 /* ==================== 차트 ==================== */
@@ -680,6 +696,73 @@ function renderChart(recs){
   });
 }
 
+/* ==================== 월별 비교 차트 ==================== */
+let trendMetric = 'cost';
+const TREND_METRIC = {
+  cost:{unit:'원',     val:m=>m.cost, f:v=>fmt(v)},
+  kwh: {unit:'kWh',    val:m=>m.kwh,  f:v=>fmtN(v)},
+  km:  {unit:'km',     val:m=>m.km,   f:v=>v==null?'-':fmt(v)},
+  unit:{unit:'원/kWh', val:m=>m.kwh? m.cost/m.kwh : null, f:v=>v==null?'-':fmt(v)},
+};
+function monthlyStats(car){
+  const map = {};
+  DB.records.filter(r=>r.car===car).forEach(r=>{
+    const ym = r.date.slice(0,7);
+    if(!map[ym]) map[ym] = {cost:0, kwh:0};
+    map[ym].cost += r.cost; map[ym].kwh += r.kwh;
+  });
+  return Object.keys(map).sort().slice(-6)
+    .map(ym=>({ym, cost:map[ym].cost, kwh:map[ym].kwh, km:monthKm(car, ym)}));
+}
+function renderTrend(){
+  const svg = $('#trendSvg'), empty = $('#trendEmpty');
+  const months = monthlyStats(DB.settings.car);
+  if(!months.length){ svg.classList.add('hidden'); empty.classList.remove('hidden'); return; }
+  empty.classList.add('hidden'); svg.classList.remove('hidden');
+
+  const M = TREND_METRIC[trendMetric];
+  const vals = months.map(m=>M.val(m));
+  const maxV = Math.max(...vals.map(v=>v||0), 1);
+  const cs = getComputedStyle(document.documentElement);
+  const c1 = cs.getPropertyValue('--series-1').trim();
+  const inkM = cs.getPropertyValue('--ink-3').trim();
+  const ink1 = cs.getPropertyValue('--ink-1').trim();
+  const base = cs.getPropertyValue('--baseline').trim();
+
+  const W=440, H=210, padT=26, padB=24, padS=10;
+  const ih = H-padT-padB, iw = W-padS*2;
+  const slot = iw/months.length;
+  const bw = Math.min(44, slot*0.55);
+  let el = `<line x1="${padS}" y1="${H-padB}" x2="${W-padS}" y2="${H-padB}" stroke="${base}" stroke-width="1"/>`;
+  months.forEach((m,i)=>{
+    const v = vals[i];
+    const cx = padS + (i+0.5)*slot;
+    const label = `${+m.ym.slice(5)}월`;
+    const isCur = m.ym===curMonth;
+    el += `<text x="${cx}" y="${H-7}" font-size="12" fill="${inkM}" text-anchor="middle" font-family="system-ui" ${isCur?'font-weight="700"':''}>${label}</text>`;
+    if(v==null || v<=0){
+      el += `<text x="${cx}" y="${H-padB-8}" font-size="11" fill="${inkM}" text-anchor="middle" font-family="system-ui">-</text>`;
+      el += `<rect data-ym="${m.ym}" x="${padS+i*slot}" y="${padT}" width="${slot}" height="${ih}" fill="transparent" style="cursor:pointer"/>`;
+      return;
+    }
+    const h = Math.max(3, v/maxV*ih);
+    const y = H-padB-h;
+    el += `<rect x="${cx-bw/2}" y="${y}" width="${bw}" height="${h}" rx="4" fill="${c1}" ${isCur?'':'opacity="0.45"'}/>`;
+    el += `<text x="${cx}" y="${y-7}" font-size="11.5" fill="${ink1}" text-anchor="middle" font-family="system-ui" font-weight="600" style="font-variant-numeric:tabular-nums">${M.f(v)}</text>`;
+    el += `<rect data-ym="${m.ym}" x="${padS+i*slot}" y="${padT-14}" width="${slot}" height="${ih+14}" fill="transparent" style="cursor:pointer"/>`;
+  });
+  svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+  svg.innerHTML = el;
+  svg.querySelectorAll('rect[data-ym]').forEach(r=> r.addEventListener('click', ()=>{
+    curMonth = r.dataset.ym; renderAll();
+  }));
+}
+document.querySelectorAll('#trendSeg button').forEach(b=> b.onclick = ()=>{
+  trendMetric = b.dataset.m;
+  document.querySelectorAll('#trendSeg button').forEach(x=>x.classList.toggle('on', x===b));
+  renderTrend();
+});
+
 /* ==================== 입력 폼 ==================== */
 function setFormMode(mode){
   formMode = mode;
@@ -738,7 +821,7 @@ function updatePreview(){
   if(formMode==='super'){
     if(f.kwh>0 && f.cost>0){
       cp.textContent = fmt(f.cost)+'원';
-      cs.textContent = `슈퍼차저 ${fmtN(f.kwh)}kWh · 단가 ${fmt(f.cost/f.kwh)}원/kWh`;
+      cs.textContent = `슈퍼차저 ${fmtN(f.kwh)}kWh · 평균단가 ${fmt(f.cost/f.kwh)}원/kWh`;
     } else { cp.textContent='-'; cs.textContent='충전량과 총 요금을 입력하세요'; }
     return;
   }
@@ -747,7 +830,7 @@ function updatePreview(){
     const r = splitCharge(f.date, start, f.end, f.kwh, f.hol);
     cp.textContent = fmt(r.cost)+'원';
     cs.innerHTML = `시작 예상 ${start} ~ ${f.end} · ${dowOf(f.date)} · ${SEASON_NAME[r.season]}<br>`+
-      segLabel({mode:'normal', seg:r.seg})+` · 단가 ${fmt(r.cost/f.kwh)}원/kWh`;
+      segLabel({mode:'normal', seg:r.seg})+` · 평균단가 ${fmt(r.cost/f.kwh)}원/kWh`;
   } else { cp.textContent='-'; cs.textContent='충전량만 입력하면 시작시간·요금이 자동 계산됩니다'; }
 }
 $('#inDate').addEventListener('input', (e)=>{ if(e.isTrusted) dateTouched=true; autoHoliday(); updatePreview(); });
