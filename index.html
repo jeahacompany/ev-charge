@@ -172,6 +172,15 @@ nav.tabs button.on{color:var(--accent)}
 .page-sec{display:none}
 .page-sec.on{display:block}
 
+.updbar{
+  position:fixed;top:0;left:0;right:0;z-index:60;display:none;align-items:center;justify-content:center;gap:14px;
+  background:var(--accent);color:#fff;padding:11px;font-size:15px;font-weight:600;
+}
+.updbar.show{display:flex}
+.updbar button{
+  background:#fff;color:var(--accent);border:none;border-radius:9px;padding:7px 16px;
+  font-weight:700;font-size:14px;font-family:inherit;cursor:pointer;
+}
 .toast{
   position:fixed;left:50%;bottom:84px;transform:translateX(-50%) translateY(20px);
   background:var(--ink-1);color:var(--page);padding:9px 18px;border-radius:99px;
@@ -182,6 +191,8 @@ nav.tabs button.on{color:var(--accent)}
 </style>
 </head>
 <body>
+
+<div class="updbar" id="updBar">새 버전이 나왔어요 <button id="btnUpd">업데이트</button></div>
 
 <header class="app"><div class="wrap">
   <h1><span class="bolt">⚡</span> 전기차 충전 관리</h1>
@@ -346,6 +357,16 @@ nav.tabs button.on{color:var(--accent)}
   </div>
 
   <div class="card">
+    <h2>업데이트 내역</h2>
+    <div id="chLog" style="font-size:13.5px;line-height:1.9;color:var(--ink-2)"></div>
+  </div>
+
+  <div class="card">
+    <h2>접속 기록 <span style="font-weight:400;color:var(--ink-3)">— 이 기기에서 앱을 연 기록</span></h2>
+    <div id="visitLog" style="font-size:13px;line-height:1.9;color:var(--ink-2);font-variant-numeric:tabular-nums"></div>
+  </div>
+
+  <div class="card">
     <h2>계산 기준 — 한전 전기차 충전전력요금(자가소비용) 저압, 전력량요금만</h2>
     <div style="font-size:12.5px;color:var(--ink-2);line-height:1.7">
       <b>여름/봄가을</b> · 경부하 22~08시 · 중간부하 08~11, 12~13, 18~22시 · 최대부하 11~12, 13~18시<br>
@@ -370,7 +391,20 @@ nav.tabs button.on{color:var(--accent)}
 
 <script>
 'use strict';
-const APP_VER = '10 (2026-07-09)';
+const APP_VER = '11 (2026-07-09)';
+const CHANGELOG = [
+  ['v11','업데이트 알림 배너 · 업데이트 내역 · 접속 기록(IP/환경)'],
+  ['v10','공휴일·일요일 완전 자동 판정(체크박스 제거) · 날짜에 요일 표시'],
+  ['v9','계기판 마지막 값 힌트 · 평균단가 줄바꿈 정리'],
+  ['v8','월별 비교 차트(요금/충전량/주행/평균단가) · "평균단가" 표기 통일'],
+  ['v7','모델 Y 6~7월 과거 데이터'],
+  ['v6','모델 3 7월 과거 데이터'],
+  ['v5','모델 3 6월 과거 데이터 이관'],
+  ['v4','종료시간 기준 입력(시작시간 역산) · 대시보드 히어로 정리 · 웹서버 배포'],
+  ['v3','접속 시각 자동 추적 · 글자·버튼 확대 · 모델 3/Y 분리'],
+  ['v2','계절별 단가 · 토/일/공휴일 규칙 · 블랙 테마'],
+  ['v1','최초 버전 — 시간대별 요금 자동 계산'],
+];
 /* ==================== 데이터 ==================== */
 const LS_KEY = 'evChargeApp.v1';
 // 한전 전기차 충전전력요금(자가소비용) 저압 — 전력량요금
@@ -811,8 +845,8 @@ function tickNow(){
   }
 }
 setInterval(tickNow, 10000);
-// 폰에서 앱을 다시 열었을 때도 즉시 현재 시각으로
-document.addEventListener('visibilitychange', ()=>{ if(!document.hidden) tickNow(); });
+// 폰에서 앱을 다시 열었을 때도 즉시 현재 시각으로 + 새 버전 확인
+document.addEventListener('visibilitychange', ()=>{ if(!document.hidden){ tickNow(); checkUpdate(); } });
 // 날짜 옆에 요일 표시 (일요일·공휴일이면 경부하 자동 적용 안내)
 function autoHoliday(){
   const d = $('#inDate').value;
@@ -1026,6 +1060,47 @@ document.querySelectorAll('nav.tabs button').forEach(b=> b.onclick = ()=>switchP
 
 function renderAll(){ renderDash(); renderList(); }
 
+/* ==================== 업데이트 확인 ==================== */
+async function checkUpdate(){
+  try{
+    const res = await fetch(location.pathname+'?chk='+Date.now(), {cache:'no-store'});
+    if(!res.ok) return;
+    const m = (await res.text()).match(/APP_VER = '([^']+)'/);
+    if(m && m[1] !== APP_VER) $('#updBar').classList.add('show');
+  }catch(e){}
+}
+$('#btnUpd').onclick = ()=> location.replace(location.pathname+'?v='+Date.now());
+setInterval(checkUpdate, 5*60*1000);
+
+/* ==================== 접속 기록 ==================== */
+const VISIT_KEY = 'evChargeApp.visits';
+function envSummary(){
+  const u = navigator.userAgent;
+  const os = /Android/.test(u)?'Android' : /iPhone|iPad/.test(u)?'iOS' : /Windows/.test(u)?'Windows' : /Mac/.test(u)?'Mac' : '기타';
+  const br = /SamsungBrowser/.test(u)?'삼성브라우저' : /Edg\//.test(u)?'Edge' : /Chrome\//.test(u)?'Chrome' : /Safari\//.test(u)?'Safari' : '기타';
+  return `${os} · ${br} · ${screen.width}×${screen.height}`;
+}
+function readVisits(){ try{ return JSON.parse(localStorage.getItem(VISIT_KEY))||[]; }catch(e){ return []; } }
+function renderVisits(){
+  const list = readVisits();
+  $('#visitLog').innerHTML = list.length
+    ? list.map(v=>`<div>${v.t} · ${v.ip||'IP 확인 중'} · ${v.env}</div>`).join('')
+    : '아직 기록이 없습니다';
+}
+function logVisit(){
+  let list = readVisits();
+  const d = new Date();
+  const entry = {t:`${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')} ${nowHM()}`, env:envSummary(), ip:''};
+  list.unshift(entry); list = list.slice(0,30);
+  try{ localStorage.setItem(VISIT_KEY, JSON.stringify(list)); }catch(e){}
+  renderVisits();
+  fetch('https://api.ipify.org?format=json').then(r=>r.json()).then(j=>{
+    entry.ip = j.ip;
+    try{ localStorage.setItem(VISIT_KEY, JSON.stringify(list)); }catch(e){}
+    renderVisits();
+  }).catch(()=>{});
+}
+
 /* ==================== 초기화 ==================== */
 applyTheme();
 applyCar();
@@ -1034,6 +1109,9 @@ renderRates();
 renderAll();
 tickNow();
 $('#appVer').textContent = APP_VER;
+$('#chLog').innerHTML = CHANGELOG.map(c=>`<div><b style="color:var(--ink-1)">${c[0]}</b> — ${c[1]}</div>`).join('');
+logVisit();
+checkUpdate();
 </script>
 </body>
 </html>
