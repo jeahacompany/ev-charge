@@ -337,6 +337,11 @@ nav.tabs button.on{color:var(--accent)}
 <!-- ============ 설정 ============ -->
 <section class="page-sec" id="page-settings">
   <div class="card">
+    <h2>앱 버전 <span style="font-weight:400;color:var(--ink-3)">현재 v<span id="appVerTop"></span></span></h2>
+    <button class="btn" id="btnRefresh" style="margin-top:0">🔄 최신 버전으로 새로고침</button>
+  </div>
+
+  <div class="card">
     <h2>화면 테마</h2>
     <div class="seg three" id="themeSeg">
       <button type="button" data-theme="dark">블랙</button>
@@ -405,7 +410,7 @@ nav.tabs button.on{color:var(--accent)}
 
 <script>
 'use strict';
-const APP_VER = '15 (2026-07-09)';
+const APP_VER = '16 (2026-07-09)';
 // 오류 원격 수집: 어떤 기기에서든 오류가 나면 다음 백업에 실려 시트로 올라옴
 window.addEventListener('error', function(ev){
   try{
@@ -417,6 +422,7 @@ window.addEventListener('error', function(ev){
   }catch(e){}
 });
 const CHANGELOG = [
+  ['v16','설정에 새로고침 버튼 · 아이폰 홈화면 앱에서 업데이트 배너 안 뜨던 문제 수정'],
   ['v15','저장 오류 자동 감지·수집 추가'],
   ['v14','시작시간을 시·분(10분 단위) 선택으로 변경, 24시간 표기 · 분 선택하면 자동으로 다음 칸 이동'],
   ['v13','자동 백업 계정을 ho910830 구글시트로 이전'],
@@ -1183,8 +1189,12 @@ async function checkUpdate(){
     if(m && m[1] !== APP_VER) $('#updBar').classList.add('show');
   }catch(e){}
 }
-$('#btnUpd').onclick = ()=> location.replace(location.pathname+'?v='+Date.now());
-setInterval(checkUpdate, 5*60*1000);
+function forceRefresh(){ location.replace(location.pathname+'?v='+Date.now()); }
+$('#btnUpd').onclick = forceRefresh;
+$('#btnRefresh').onclick = forceRefresh;
+setInterval(checkUpdate, 2*60*1000);
+// 아이폰 홈화면 앱은 다시 열 때 pageshow가 옴 — 여기서도 시각·버전 갱신
+window.addEventListener('pageshow', ()=>{ tickNow(); checkUpdate(); });
 
 /* ==================== 접속 기록 ==================== */
 const VISIT_KEY = 'evChargeApp.visits';
@@ -1223,6 +1233,7 @@ renderRates();
 renderAll();
 tickNow();
 $('#appVer').textContent = APP_VER;
+$('#appVerTop').textContent = APP_VER;
 $('#chLog').innerHTML = CHANGELOG.map(c=>`<div><b style="color:var(--ink-1)">${c[0]}</b> — ${c[1]}</div>`).join('');
 logVisit();
 checkUpdate();
