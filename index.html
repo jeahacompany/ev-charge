@@ -363,7 +363,43 @@ const DEFAULT_RATES = {
   winter:{light:107.4, mid:154.9, max:217.5},
 };
 const CAR_NAME = {m3:'모델 3', my:'모델 Y'};
+// 2026년 6월 과거 데이터 (모델 3, 구글시트에서 이관)
+const SEED = [
+  {id:'s2606-01', date:'2026-06-01', start:'09:00', end:'12:09', kwh:22, seg:{light:0,mid:14,max:8},    cost:4482,  odo:4000, hol:false},
+  {id:'s2606-02', date:'2026-06-03', start:'09:00', end:'16:51', kwh:56, seg:{light:55,mid:0,max:0},    cost:4637,  odo:0,    hol:true},
+  {id:'s2606-03', date:'2026-06-04', start:'09:00', end:'11:09', kwh:15, seg:{light:0,mid:14,max:1},    cost:2667,  odo:0,    hol:false},
+  {id:'s2606-04', date:'2026-06-08', start:'09:00', end:'10:09', kwh:8,  seg:{light:0,mid:8,max:0},     cost:1376,  odo:0,    hol:false},
+  {id:'s2606-05', date:'2026-06-08', start:'18:00', end:'19:43', kwh:12, seg:{light:0,mid:12,max:0},    cost:2064,  odo:0,    hol:false},
+  {id:'s2606-06', date:'2026-06-09', start:'09:00', end:'12:00', kwh:21, seg:{light:0,mid:14,max:7},    cost:4222,  odo:0,    hol:false},
+  {id:'s2606-07', date:'2026-06-10', mode:'super',                kwh:97, seg:null,                      cost:33222, odo:0,    hol:false},
+  {id:'s2606-08', date:'2026-06-10', start:'', end:'',            kwh:11, seg:{light:0,mid:11,max:0},    cost:1892,  odo:0,    hol:false},
+  {id:'s2606-09', date:'2026-06-10', start:'08:40', end:'10:31', kwh:13, seg:{light:0,mid:13,max:0},    cost:2236,  odo:0,    hol:false},
+  {id:'s2606-10', date:'2026-06-11', start:'09:30', end:'12:39', kwh:22, seg:{light:0,mid:15,max:7},    cost:4394,  odo:0,    hol:false},
+  {id:'s2606-11', date:'2026-06-11', start:'15:30', end:'17:21', kwh:13, seg:{light:0,mid:0,max:13},    cost:3370,  odo:0,    hol:false},
+  {id:'s2606-12', date:'2026-06-12', start:'09:00', end:'14:51', kwh:41, seg:{light:0,mid:21,max:20},   cost:8796,  odo:5079, hol:false},
+  {id:'s2606-13', date:'2026-06-14', start:'11:40', end:'17:00', kwh:33, seg:{light:33,mid:0,max:0},    cost:2782,  odo:5168, hol:true},
+  {id:'s2606-14', date:'2026-06-16', start:'09:00', end:'10:17', kwh:9,  seg:{light:0,mid:9,max:0},     cost:1548,  odo:5201, hol:false},
+  {id:'s2606-15', date:'2026-06-17', start:'09:00', end:'11:09', kwh:15, seg:{light:0,mid:14,max:1},    cost:2667,  odo:5270, hol:false},
+  {id:'s2606-16', date:'2026-06-18', start:'09:00', end:'10:26', kwh:10, seg:{light:0,mid:10,max:0},    cost:1720,  odo:5310, hol:false},
+  {id:'s2606-17', date:'2026-06-19', start:'09:30', end:'10:56', kwh:10, seg:{light:0,mid:10,max:0},    cost:1720,  odo:5361, hol:false},
+  {id:'s2606-18', date:'2026-06-19', start:'11:57', end:'13:48', kwh:13, seg:{light:0,mid:7,max:6},     cost:2759,  odo:5361, hol:false},
+  {id:'s2606-19', date:'2026-06-22', mode:'super',                kwh:80, seg:null,                      cost:26781, odo:6078, hol:false},
+  {id:'s2606-20', date:'2026-06-23', start:'10:30', end:'13:47', kwh:23, seg:{light:0,mid:10.5,max:12.5},cost:5046, odo:6078, hol:false},
+  {id:'s2606-21', date:'2026-06-23', start:'16:00', end:'17:17', kwh:9,  seg:{light:0,mid:0,max:9},     cost:2333,  odo:6129, hol:false},
+  {id:'s2606-22', date:'2026-06-24', start:'09:00', end:'13:34', kwh:32, seg:{light:0,mid:14,max:18},   cost:7061,  odo:6150, hol:false},
+  {id:'s2606-23', date:'2026-06-25', start:'10:00', end:'10:51', kwh:6,  seg:{light:0,mid:6,max:0},     cost:1032,  odo:6173, hol:false},
+  {id:'s2606-24', date:'2026-06-26', start:'09:00', end:'10:09', kwh:8,  seg:{light:0,mid:8,max:0},     cost:1376,  odo:6208, hol:false},
+  {id:'s2606-25', date:'2026-06-29', start:'09:30', end:'11:13', kwh:12, seg:{light:0,mid:10.5,max:1.5},cost:2196,  odo:6250, hol:false},
+  {id:'s2606-26', date:'2026-06-30', start:'09:00', end:'10:43', kwh:12, seg:{light:0,mid:12,max:0},    cost:2064,  odo:6282, hol:false},
+].map(r=> Object.assign({mode:'normal', car:'m3', start:'', end:''}, r));
 let DB = load();
+// 과거 데이터 1회 자동 주입 (이미 있으면 건너뜀)
+if(!DB.settings.seeded2606){
+  const have = new Set(DB.records.map(r=>r.id));
+  SEED.forEach(r=>{ if(!have.has(r.id)) DB.records.push(r); });
+  DB.settings.seeded2606 = true;
+  save();
+}
 function load(){
   let d = null;
   try{ d = JSON.parse(localStorage.getItem(LS_KEY)); }catch(e){}
