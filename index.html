@@ -392,12 +392,29 @@ const SEED = [
   {id:'s2606-25', date:'2026-06-29', start:'09:30', end:'11:13', kwh:12, seg:{light:0,mid:10.5,max:1.5},cost:2196,  odo:6250, hol:false},
   {id:'s2606-26', date:'2026-06-30', start:'09:00', end:'10:43', kwh:12, seg:{light:0,mid:12,max:0},    cost:2064,  odo:6282, hol:false},
 ].map(r=> Object.assign({mode:'normal', car:'m3', start:'', end:''}, r));
+// 2026년 7월 과거 데이터 (모델 3)
+const SEED7 = [
+  {id:'s2607-01', date:'2026-07-01', start:'09:00', end:'10:43', kwh:12, seg:{light:0,mid:12,max:0}, cost:2064, odo:6322, hol:false},
+  {id:'s2607-02', date:'2026-07-01', start:'22:00', end:'23:09', kwh:8,  seg:{light:8,mid:0,max:0},  cost:674,  odo:6385, hol:false},
+  {id:'s2607-03', date:'2026-07-03', start:'10:00', end:'12:00', kwh:14, seg:{light:0,mid:7,max:7},  cost:3018, odo:6430, hol:false},
+  {id:'s2607-04', date:'2026-07-07', start:'13:00', end:'16:26', kwh:24, seg:{light:0,mid:0,max:24}, cost:6221, odo:6567, hol:false},
+  {id:'s2607-05', date:'2026-07-07', start:'18:00', end:'18:34', kwh:4,  seg:{light:0,mid:4,max:0},  cost:688,  odo:6567, hol:false},
+].map(r=> Object.assign({mode:'normal', car:'m3'}, r));
 let DB = load();
 // 과거 데이터 1회 자동 주입 (이미 있으면 건너뜀)
 if(!DB.settings.seeded2606){
   const have = new Set(DB.records.map(r=>r.id));
   SEED.forEach(r=>{ if(!have.has(r.id)) DB.records.push(r); });
   DB.settings.seeded2606 = true;
+  save();
+}
+if(!DB.settings.seeded2607){
+  const have = new Set(DB.records.map(r=>r.id));
+  SEED7.forEach(r=>{ if(!have.has(r.id)) DB.records.push(r); });
+  // 6월 말일 계기판을 시트 기준(6,313)으로 보정 → 6월 2,313km / 7월 시작 6,313
+  const r630 = DB.records.find(r=>r.id==='s2606-26');
+  if(r630 && r630.odo===6282) r630.odo = 6313;
+  DB.settings.seeded2607 = true;
   save();
 }
 function load(){
