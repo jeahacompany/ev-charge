@@ -410,7 +410,10 @@ nav.tabs button.on{color:var(--accent)}
 
 <script>
 'use strict';
-const APP_VER = '16 (2026-07-09)';
+const APP_VER = '17 (2026-07-09)';
+// 주의: 아래 두 선언은 시드 주입(save 호출)보다 반드시 먼저 와야 함
+const BACKUP_URL = 'https://script.google.com/macros/s/AKfycbyJUA-w8falwPZa0uOmKND2MlHkfh4L2RoDwg4IAvw51X5BEnNscW-QPFgE6aBJzvv75g/exec'; // 구글시트 자동백업 (ho910830)
+let backupTimer = null;
 // 오류 원격 수집: 어떤 기기에서든 오류가 나면 다음 백업에 실려 시트로 올라옴
 window.addEventListener('error', function(ev){
   try{
@@ -422,6 +425,7 @@ window.addEventListener('error', function(ev){
   }catch(e){}
 });
 const CHANGELOG = [
+  ['v17','기기 간 자동 동기화 — 폰에서 넣은 기록이 PC에서도 보임 (구글시트 경유)'],
   ['v16','설정에 새로고침 버튼 · 아이폰 홈화면 앱에서 업데이트 배너 안 뜨던 문제 수정'],
   ['v15','저장 오류 자동 감지·수집 추가'],
   ['v14','시작시간을 시·분(10분 단위) 선택으로 변경, 24시간 표기 · 분 선택하면 자동으로 다음 칸 이동'],
@@ -526,13 +530,12 @@ function load(){
   d.settings.chargerKw = d.settings.chargerKw || 7;
   d.settings.car = d.settings.car || 'm3';
   d.records.forEach(r=>{ if(!r.car) r.car='m3'; });
+  if(!Array.isArray(d.deleted)) d.deleted = []; // 삭제 기록(동기화 시 부활 방지)
   return d;
 }
 function save(){ try{ localStorage.setItem(LS_KEY, JSON.stringify(DB)); }catch(e){} cloudBackup(); }
 
 /* ==================== 자동 백업 (구글 시트) ==================== */
-const BACKUP_URL = 'https://script.google.com/macros/s/AKfycbyJUA-w8falwPZa0uOmKND2MlHkfh4L2RoDwg4IAvw51X5BEnNscW-QPFgE6aBJzvv75g/exec'; // 구글시트 자동백업 (ho910830)
-let backupTimer = null;
 function cloudBackup(){
   if(!BACKUP_URL) return;
   clearTimeout(backupTimer);
@@ -549,6 +552,27 @@ function cloudBackup(){
         renderBackupStatus();
       }).catch(()=>{});
   }, 1500);
+}
+// 기기 간 동기화: 시트의 최신 백업을 읽어와 없는 기록을 합침 (union by id + 삭제 톰스톤)
+async function cloudSync(){
+  if(!BACKUP_URL) return;
+  try{
+    const res = await fetch(BACKUP_URL);
+    if(!res.ok) return;
+    const remote = await res.json();
+    if(!remote || !Array.isArray(remote.records)) return;
+    const del = new Set([...(DB.deleted||[]), ...(remote.deleted||[])]);
+    const have = new Set(DB.records.map(r=>r.id));
+    let changed = false;
+    remote.records.forEach(r=>{
+      if(r && r.id && !have.has(r.id) && !del.has(r.id)){ DB.records.push(r); changed = true; }
+    });
+    const before = DB.records.length;
+    DB.records = DB.records.filter(r=>!del.has(r.id));
+    if(DB.records.length !== before) changed = true;
+    DB.deleted = [...del].slice(-500);
+    if(changed){ save(); renderAll(); toast('다른 기기 기록을 가져왔습니다 🔄'); }
+  }catch(e){}
 }
 function renderBackupStatus(){
   const el = document.getElementById('backupStatus');
@@ -932,7 +956,7 @@ function tickNow(){
 }
 setInterval(tickNow, 10000);
 // 폰에서 앱을 다시 열었을 때도 즉시 현재 시각으로 + 새 버전 확인
-document.addEventListener('visibilitychange', ()=>{ if(!document.hidden){ tickNow(); checkUpdate(); } });
+document.addEventListener('visibilitychange', ()=>{ if(!document.hidden){ tickNow(); checkUpdate(); cloudSync(); } });
 // 날짜 옆 요일 배지 (일요일·공휴일이면 경부하 자동 적용 표시)
 function autoHoliday(){
   const d = $('#inDate').value;
@@ -1074,6 +1098,7 @@ function delRec(id){
   if(!r) return;
   if(!confirm(`${r.date} ${fmtN(r.kwh)}kWh 기록을 삭제할까요?`)) return;
   DB.records = DB.records.filter(x=>x.id!==id);
+  DB.deleted.push(id); // 다른 기기에서 동기화로 되살아나지 않게 기록
   save(); renderAll(); toast('삭제되었습니다');
 }
 
@@ -1193,8 +1218,8 @@ function forceRefresh(){ location.replace(location.pathname+'?v='+Date.now()); }
 $('#btnUpd').onclick = forceRefresh;
 $('#btnRefresh').onclick = forceRefresh;
 setInterval(checkUpdate, 2*60*1000);
-// 아이폰 홈화면 앱은 다시 열 때 pageshow가 옴 — 여기서도 시각·버전 갱신
-window.addEventListener('pageshow', ()=>{ tickNow(); checkUpdate(); });
+// 아이폰 홈화면 앱은 다시 열 때 pageshow가 옴 — 여기서도 시각·버전·동기화 갱신
+window.addEventListener('pageshow', ()=>{ tickNow(); checkUpdate(); cloudSync(); });
 
 /* ==================== 접속 기록 ==================== */
 const VISIT_KEY = 'evChargeApp.visits';
@@ -1238,7 +1263,7 @@ $('#chLog').innerHTML = CHANGELOG.map(c=>`<div><b style="color:var(--ink-1)">${c
 logVisit();
 checkUpdate();
 renderBackupStatus();
-cloudBackup(); // 앱 열 때마다 한 번 백업
+cloudSync().then(()=> cloudBackup()); // 앱 열 때: 다른 기기 기록 가져온 뒤 백업
 </script>
 </body>
 </html>
