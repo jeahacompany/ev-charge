@@ -1,0 +1,877 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#1a1a19">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>⚡ 전기차 충전 관리</title>
+<style>
+:root{
+  --surface-1:#fcfcfb; --page:#f9f9f7;
+  --ink-1:#0b0b0b; --ink-2:#52514e; --ink-3:#898781;
+  --grid:#e1e0d9; --baseline:#c3c2b7;
+  --border:rgba(11,11,11,0.10);
+  --series-1:#2a78d6; --series-2:#1baf7a;
+  --accent:#2a78d6; --accent-soft:rgba(42,120,214,0.10);
+  --good:#006300; --danger:#d03b3b;
+}
+:root[data-theme="dark"]{
+  --surface-1:#1a1a19; --page:#0d0d0d;
+  --ink-1:#ffffff; --ink-2:#c3c2b7; --ink-3:#898781;
+  --grid:#2c2c2a; --baseline:#383835;
+  --border:rgba(255,255,255,0.10);
+  --series-1:#3987e5; --series-2:#199e70;
+  --accent:#3987e5; --accent-soft:rgba(57,135,229,0.15);
+  --good:#0ca30c; --danger:#e66767;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --surface-1:#1a1a19; --page:#0d0d0d;
+    --ink-1:#ffffff; --ink-2:#c3c2b7; --ink-3:#898781;
+    --grid:#2c2c2a; --baseline:#383835;
+    --border:rgba(255,255,255,0.10);
+    --series-1:#3987e5; --series-2:#199e70;
+    --accent:#3987e5; --accent-soft:rgba(57,135,229,0.15);
+    --good:#0ca30c; --danger:#e66767;
+  }
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{
+  font-family:system-ui,-apple-system,"Segoe UI","Malgun Gothic",sans-serif;
+  background:var(--page); color:var(--ink-1); font-size:17px; line-height:1.5;
+  padding-bottom:calc(76px + env(safe-area-inset-bottom));
+}
+.wrap{max-width:480px;margin:0 auto;padding:12px 14px 20px}
+header.app{position:sticky;top:0;z-index:20;background:var(--page);border-bottom:1px solid var(--grid)}
+header.app .wrap{display:flex;align-items:center;justify-content:space-between;padding-top:12px;padding-bottom:10px}
+header.app h1{font-size:18px;font-weight:700;white-space:nowrap}
+header.app h1 .bolt{color:var(--series-1)}
+.month-nav{display:flex;align-items:center;gap:4px}
+.month-nav button{
+  width:42px;height:42px;border:1px solid var(--border);border-radius:12px;
+  background:var(--surface-1);color:var(--ink-2);font-size:18px;cursor:pointer;
+}
+.month-nav .cur{font-weight:700;font-size:17px;min-width:100px;text-align:center;font-variant-numeric:tabular-nums}
+
+/* ---- cards & tiles ---- */
+.card{background:var(--surface-1);border:1px solid var(--border);border-radius:16px;padding:16px;margin-top:16px}
+.card h2{font-size:15px;font-weight:600;color:var(--ink-2);margin-bottom:10px}
+.tiles{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:16px}
+.hero{padding:24px 20px}
+.hero .lb{font-size:14px;color:var(--ink-3)}
+.heroval{font-size:44px;font-weight:700;line-height:1.15;margin-top:4px}
+.heroval .un{font-size:19px;font-weight:400;color:var(--ink-3);margin-left:4px}
+.herosub{display:flex;gap:20px;margin-top:12px;font-size:15px;color:var(--ink-3)}
+.herosub b{color:var(--ink-1);font-weight:600;font-variant-numeric:tabular-nums}
+.tile{background:var(--surface-1);border:1px solid var(--border);border-radius:16px;padding:14px 16px}
+.tile .lb{font-size:14px;color:var(--ink-3)}
+.tile .vl{font-size:29px;font-weight:700;margin-top:2px}
+.tile .un{font-size:14px;font-weight:400;color:var(--ink-3);margin-left:3px}
+.split{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:16px}
+.split .card{margin-top:0}
+.split h2{display:flex;align-items:center;gap:6px}
+.swatch{width:12px;height:12px;border-radius:3px;display:inline-block}
+.split dl{display:grid;grid-template-columns:auto 1fr;row-gap:4px;column-gap:8px;font-size:15px}
+.split dt{color:var(--ink-3)}
+.split dd{text-align:right;font-weight:600;font-variant-numeric:tabular-nums}
+
+/* ---- chart ---- */
+.chart-box{position:relative}
+.chart-box svg{display:block;width:100%;height:auto}
+.legend{display:flex;gap:14px;font-size:12px;color:var(--ink-2);margin-bottom:8px}
+.legend span{display:flex;align-items:center;gap:5px}
+.tooltip{
+  position:absolute;pointer-events:none;background:var(--surface-1);border:1px solid var(--border);
+  border-radius:10px;padding:6px 10px;font-size:12px;box-shadow:0 4px 14px rgba(0,0,0,.18);
+  white-space:nowrap;display:none;z-index:5;
+}
+.tooltip b{font-variant-numeric:tabular-nums}
+.empty{color:var(--ink-3);font-size:13px;text-align:center;padding:24px 0}
+
+/* ---- forms ---- */
+label.f{display:block;font-size:14px;color:var(--ink-2);margin:14px 0 5px;font-weight:600}
+input,select{
+  width:100%;padding:14px;border:1px solid var(--border);border-radius:12px;
+  background:var(--page);color:var(--ink-1);font-size:18px;font-family:inherit;
+}
+input:focus,select:focus{outline:2px solid var(--accent);outline-offset:-1px;border-color:transparent}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.seg{display:grid;grid-template-columns:1fr 1fr;background:var(--page);border:1px solid var(--border);border-radius:12px;padding:3px;gap:3px;margin-top:4px}
+.seg button{
+  padding:12px 0;border:none;border-radius:10px;background:transparent;color:var(--ink-2);
+  font-size:16px;font-weight:600;cursor:pointer;font-family:inherit;
+}
+.seg button.on{background:var(--surface-1);color:var(--ink-1);box-shadow:0 1px 4px rgba(0,0,0,.12)}
+.seg.three{grid-template-columns:1fr 1fr 1fr}
+header.app .carwrap{display:block;padding-top:0;padding-bottom:10px}
+header.app .carwrap .seg{margin-top:0;background:var(--surface-1)}
+header.app .carwrap .seg button.on{background:var(--accent);color:#fff}
+.chkrow{display:flex;align-items:center;gap:10px;margin-top:16px;font-size:16px;color:var(--ink-2);cursor:pointer;user-select:none}
+.chkrow input{width:21px;height:21px;accent-color:var(--accent);margin:0}
+.nowchip{font-weight:400;color:var(--ink-3);font-size:13px}
+.calc-preview{
+  margin-top:16px;background:var(--accent-soft);border-radius:14px;padding:14px 16px;font-size:15px;
+}
+.calc-preview .big{font-size:27px;font-weight:700;font-variant-numeric:tabular-nums}
+.calc-preview .seginfo{color:var(--ink-2);margin-top:3px}
+.btn{
+  width:100%;margin-top:18px;padding:16px 0;border:none;border-radius:14px;
+  background:var(--accent);color:#fff;font-size:18px;font-weight:700;cursor:pointer;font-family:inherit;
+}
+.btn.ghost{background:transparent;color:var(--ink-2);border:1px solid var(--border);font-weight:600;margin-top:8px}
+.btn.danger{background:transparent;color:var(--danger);border:1px solid var(--border);font-weight:600;margin-top:8px}
+
+/* ---- records ---- */
+.rec{
+  background:var(--surface-1);border:1px solid var(--border);border-radius:16px;
+  padding:14px 16px;margin-top:10px;
+}
+.rec .top{display:flex;justify-content:space-between;align-items:baseline}
+.rec .date{font-weight:700;font-size:17px}
+.rec .date .dow{font-weight:400;color:var(--ink-3);font-size:14px;margin-left:5px}
+.rec .cost{font-weight:700;font-size:18px;font-variant-numeric:tabular-nums}
+.rec .mid{display:flex;justify-content:space-between;align-items:center;margin-top:5px;font-size:15px;color:var(--ink-2)}
+.rec .badge{
+  display:inline-block;font-size:13px;font-weight:600;padding:2px 10px;border-radius:99px;margin-right:6px;
+  background:var(--accent-soft);color:var(--accent);
+}
+.rec .badge.super{background:rgba(27,175,122,.13);color:var(--series-2)}
+.rec .sub{font-size:14px;color:var(--ink-3);margin-top:3px;display:flex;justify-content:space-between}
+.rec .acts{display:flex;gap:8px;margin-top:10px}
+.rec .acts button{
+  flex:1;padding:10px 0;font-size:15px;border:1px solid var(--border);border-radius:10px;
+  background:transparent;color:var(--ink-2);cursor:pointer;font-family:inherit;
+}
+.rec .acts button.del{color:var(--danger)}
+
+/* ---- settings ---- */
+table.rates{width:100%;border-collapse:collapse;font-size:13px}
+table.rates th{font-weight:600;color:var(--ink-3);padding:4px;text-align:center;font-size:12px}
+table.rates td{padding:3px}
+table.rates td:first-child{color:var(--ink-2);white-space:nowrap;padding-right:8px}
+table.rates input{padding:8px;text-align:right;font-size:14px;font-variant-numeric:tabular-nums}
+
+/* ---- tabs ---- */
+nav.tabs{
+  position:fixed;bottom:0;left:0;right:0;z-index:30;
+  background:var(--surface-1);border-top:1px solid var(--grid);
+  padding-bottom:env(safe-area-inset-bottom);
+}
+nav.tabs .in{max-width:480px;margin:0 auto;display:grid;grid-template-columns:repeat(4,1fr)}
+nav.tabs button{
+  padding:10px 0 9px;border:none;background:transparent;color:var(--ink-3);
+  font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;
+  display:flex;flex-direction:column;align-items:center;gap:3px;
+}
+nav.tabs button .ic{font-size:23px;line-height:1}
+nav.tabs button.on{color:var(--accent)}
+.page-sec{display:none}
+.page-sec.on{display:block}
+
+.toast{
+  position:fixed;left:50%;bottom:84px;transform:translateX(-50%) translateY(20px);
+  background:var(--ink-1);color:var(--page);padding:9px 18px;border-radius:99px;
+  font-size:14px;font-weight:600;opacity:0;transition:.25s;z-index:40;pointer-events:none;
+}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+.hidden{display:none!important}
+</style>
+</head>
+<body>
+
+<header class="app"><div class="wrap">
+  <h1><span class="bolt">⚡</span> 전기차 충전 관리</h1>
+  <div class="month-nav" id="monthNav">
+    <button id="mPrev" aria-label="이전 달">‹</button>
+    <span class="cur" id="mCur">2026년 7월</span>
+    <button id="mNext" aria-label="다음 달">›</button>
+  </div>
+</div>
+<div class="wrap carwrap">
+  <div class="seg" id="carSeg">
+    <button type="button" data-car="m3" class="on">모델 3</button>
+    <button type="button" data-car="my">모델 Y</button>
+  </div>
+</div></header>
+
+<div class="wrap">
+
+<!-- ============ 대시보드 ============ -->
+<section class="page-sec on" id="page-dash">
+  <div class="card hero">
+    <div class="lb">이번 달 충전요금</div>
+    <div class="heroval" id="dCost">0<span class="un">원</span></div>
+    <div class="herosub">
+      <span><b id="dCount">0</b>회</span>
+      <span><b id="dKwh">0</b> kWh</span>
+      <span><b id="dUnit">0</b>원/kWh</span>
+    </div>
+  </div>
+
+  <div class="split">
+    <div class="card">
+      <h2><span class="swatch" style="background:var(--series-1)"></span>일반충전</h2>
+      <dl>
+        <dt>충전량</dt><dd id="sNkwh">0 kWh</dd>
+        <dt>요금</dt><dd id="sNcost">0원</dd>
+        <dt>단가</dt><dd id="sNunit">-</dd>
+      </dl>
+    </div>
+    <div class="card">
+      <h2><span class="swatch" style="background:var(--series-2)"></span>슈퍼차저</h2>
+      <dl>
+        <dt>충전량</dt><dd id="sSkwh">0 kWh</dd>
+        <dt>요금</dt><dd id="sScost">0원</dd>
+        <dt>단가</dt><dd id="sSunit">-</dd>
+      </dl>
+    </div>
+  </div>
+
+  <div class="tiles">
+    <div class="tile"><div class="lb">이번 달 주행</div><div class="vl" id="dKm">-<span class="un">km</span></div></div>
+    <div class="tile"><div class="lb">km당 충전비</div><div class="vl" id="dCostKm">-<span class="un">원/km</span></div></div>
+  </div>
+
+  <div class="card">
+    <h2>일자별 충전량 (kWh)</h2>
+    <div class="legend">
+      <span><span class="swatch" style="background:var(--series-1)"></span>일반충전</span>
+      <span><span class="swatch" style="background:var(--series-2)"></span>슈퍼차저</span>
+    </div>
+    <div class="chart-box" id="chartBox">
+      <div class="empty" id="chartEmpty">이번 달 기록이 없습니다</div>
+      <svg id="chartSvg" class="hidden" role="img" aria-label="일자별 충전량 차트"></svg>
+      <div class="tooltip" id="chartTip"></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 입력 ============ -->
+<section class="page-sec" id="page-input">
+  <div class="card">
+    <h2 id="formTitle">충전 기록 입력</h2>
+
+    <label class="f">충전 구분</label>
+    <div class="seg" id="modeSeg">
+      <button type="button" data-mode="normal" class="on">일반충전</button>
+      <button type="button" data-mode="super">슈퍼차저</button>
+    </div>
+
+    <label class="f" for="inDate">날짜</label>
+    <input type="date" id="inDate">
+
+    <label class="f" for="inKwh">충전량 (kWh)</label>
+    <input type="number" id="inKwh" inputmode="decimal" step="0.1" min="0" placeholder="예: 22">
+
+    <div id="timeRow">
+      <label class="f" for="inEnd">종료 시간 <span class="nowchip">지금 <span id="nowClock">--:--</span> 자동 · 직접 수정 가능</span></label>
+      <input type="time" id="inEnd">
+    </div>
+
+    <label class="chkrow" id="holRow"><input type="checkbox" id="inHoliday"> 공휴일·일요일 (전시간 경부하)</label>
+
+    <div id="superCostRow" class="hidden">
+      <label class="f" for="inCost">총 요금 (원)</label>
+      <input type="number" id="inCost" inputmode="numeric" step="1" min="0" placeholder="예: 33222">
+    </div>
+
+    <label class="f" for="inOdo">계기판 누적거리 (km) <span style="font-weight:400;color:var(--ink-3)">— 선택</span></label>
+    <input type="number" id="inOdo" inputmode="numeric" step="1" min="0" placeholder="예: 6313">
+
+    <div class="calc-preview" id="calcPreview">
+      <div class="big" id="cpCost">-</div>
+      <div class="seginfo" id="cpSeg">시간과 충전량을 입력하면 요금이 자동 계산됩니다</div>
+    </div>
+
+    <button class="btn" id="btnSave">저장</button>
+    <button class="btn ghost hidden" id="btnCancelEdit">수정 취소</button>
+  </div>
+</section>
+
+<!-- ============ 기록 ============ -->
+<section class="page-sec" id="page-list">
+  <div id="recList"></div>
+</section>
+
+<!-- ============ 설정 ============ -->
+<section class="page-sec" id="page-settings">
+  <div class="card">
+    <h2>화면 테마</h2>
+    <div class="seg three" id="themeSeg">
+      <button type="button" data-theme="dark">블랙</button>
+      <button type="button" data-theme="light">화이트</button>
+      <button type="button" data-theme="auto">자동</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>충전기 출력 (kW) — 시작시간 역산에 사용</h2>
+    <input type="number" id="inChargerKw" inputmode="decimal" step="0.1" min="1" placeholder="7">
+  </div>
+
+  <div class="card">
+    <h2>충전 단가 (원/kWh)</h2>
+    <table class="rates">
+      <thead><tr><th></th><th>경부하</th><th>중간부하</th><th>최대부하</th></tr></thead>
+      <tbody id="rateBody"></tbody>
+    </table>
+    <button class="btn" id="btnSaveRates" style="margin-top:12px">단가 저장</button>
+  </div>
+
+  <div class="card">
+    <h2>데이터</h2>
+    <button class="btn ghost" style="margin-top:0" id="btnCsv">CSV 내보내기 (엑셀용)</button>
+    <button class="btn ghost" id="btnBackup">JSON 백업</button>
+    <button class="btn ghost" id="btnRestore">JSON 복원</button>
+    <input type="file" id="fileRestore" accept=".json" class="hidden">
+    <button class="btn danger" id="btnWipe">전체 데이터 삭제</button>
+  </div>
+
+  <div class="card">
+    <h2>계산 기준 — 한전 전기차 충전전력요금(자가소비용) 저압, 전력량요금만</h2>
+    <div style="font-size:12.5px;color:var(--ink-2);line-height:1.7">
+      <b>여름/봄가을</b> · 경부하 22~08시 · 중간부하 08~11, 12~13, 18~22시 · 최대부하 11~12, 13~18시<br>
+      <b>겨울</b> · 경부하 22~08시 · 중간부하 08~09, 12~16, 19~22시 · 최대부하 09~12, 16~19시<br>
+      <b>토요일</b> · 최대부하 → 중간부하 요금 적용<br>
+      <b>일요일·법정공휴일</b> · 전시간 경부하 (2026~27년 공휴일 자동 인식, 입력 시 체크박스로 수정 가능)<br>
+      <span style="color:var(--ink-3)">계절 자동 판정: 여름 6~8월 · 겨울 11~2월 · 나머지 봄가을 / 시작시간 = 종료 − 충전량÷충전기출력</span>
+    </div>
+  </div>
+</section>
+
+</div>
+
+<nav class="tabs"><div class="in">
+  <button data-page="dash" class="on"><span class="ic">📊</span>대시보드</button>
+  <button data-page="input"><span class="ic">⚡</span>입력</button>
+  <button data-page="list"><span class="ic">📋</span>기록</button>
+  <button data-page="settings"><span class="ic">⚙️</span>설정</button>
+</div></nav>
+
+<div class="toast" id="toast"></div>
+
+<script>
+'use strict';
+/* ==================== 데이터 ==================== */
+const LS_KEY = 'evChargeApp.v1';
+// 한전 전기차 충전전력요금(자가소비용) 저압 — 전력량요금
+const DEFAULT_RATES = {
+  summer:{light:84.3, mid:172.0, max:259.2},
+  spring:{light:85.4, mid:97.2, max:102.1},
+  winter:{light:107.4, mid:154.9, max:217.5},
+};
+const CAR_NAME = {m3:'모델 3', my:'모델 Y'};
+let DB = load();
+function load(){
+  let d = null;
+  try{ d = JSON.parse(localStorage.getItem(LS_KEY)); }catch(e){}
+  if(!d || !Array.isArray(d.records)) d = {records:[], settings:{}};
+  d.settings = d.settings || {};
+  d.settings.rates = Object.assign(JSON.parse(JSON.stringify(DEFAULT_RATES)), d.settings.rates);
+  d.settings.theme = d.settings.theme || 'dark';
+  d.settings.chargerKw = d.settings.chargerKw || 7;
+  d.settings.car = d.settings.car || 'm3';
+  d.records.forEach(r=>{ if(!r.car) r.car='m3'; });
+  return d;
+}
+function save(){ try{ localStorage.setItem(LS_KEY, JSON.stringify(DB)); }catch(e){} }
+
+/* ==================== 공휴일 (2026~2027 대체공휴일 포함) ==================== */
+const HOLIDAYS = new Set([
+  '2026-01-01','2026-02-16','2026-02-17','2026-02-18','2026-03-01','2026-03-02',
+  '2026-05-05','2026-05-24','2026-05-25','2026-06-03','2026-06-06',
+  '2026-08-15','2026-08-17','2026-09-24','2026-09-25','2026-09-26',
+  '2026-10-03','2026-10-05','2026-10-09','2026-12-25',
+  '2027-01-01','2027-02-06','2027-02-07','2027-02-08','2027-02-09','2027-03-01',
+  '2027-05-05','2027-05-13','2027-06-06','2027-08-15','2027-08-16',
+  '2027-09-14','2027-09-15','2027-09-16','2027-10-03','2027-10-04',
+  '2027-10-09','2027-10-11','2027-12-25','2027-12-27',
+]);
+const FIXED_HOL = ['01-01','03-01','05-05','06-06','08-15','10-03','10-09','12-25'];
+function isHoliday(dateStr){
+  if(HOLIDAYS.has(dateStr)) return true;
+  const y = +dateStr.slice(0,4);
+  return (y<2026 || y>2027) && FIXED_HOL.includes(dateStr.slice(5));
+}
+function isAllLightAuto(dateStr){ // 일요일 또는 공휴일 → 전시간 경부하
+  return new Date(dateStr+'T00:00:00').getDay()===0 || isHoliday(dateStr);
+}
+
+/* ==================== 요금 계산 ==================== */
+const SEASON_NAME = {summer:'여름', spring:'봄가을', winter:'겨울'};
+const BAND_NAME = {light:'경부하', mid:'중간부하', max:'최대부하'};
+function seasonOf(dateStr){
+  const m = +dateStr.slice(5,7);
+  if(m>=6 && m<=8) return 'summer';
+  if(m>=11 || m<=2) return 'winter';
+  return 'spring';
+}
+function bandAt(min, season){ // min: 0~1439
+  const h = min/60;
+  if(h>=22 || h<8) return 'light';
+  if(season==='winter'){
+    if((h>=9&&h<12)||(h>=16&&h<19)) return 'max';
+    return 'mid'; // 8~9, 12~16, 19~22
+  }
+  if((h>=11&&h<12)||(h>=13&&h<18)) return 'max';
+  return 'mid'; // 8~11, 12~13, 18~22
+}
+const toMin = t => { const [h,m]=t.split(':').map(Number); return h*60+m; };
+// 시작~종료 시간에 걸친 시간대별 분(minute)에 비례해 충전량을 배분
+// allLight: 일요일·공휴일 → 전시간 경부하 / 토요일: 최대부하 → 중간부하
+function splitCharge(dateStr, start, end, kwh, allLight){
+  const season = seasonOf(dateStr);
+  const isSat = new Date(dateStr+'T00:00:00').getDay()===6;
+  let s = toMin(start), e = toMin(end);
+  if(e <= s) e += 1440; // 자정 넘김
+  const mins = {light:0, mid:0, max:0};
+  for(let m=s; m<e; m++){
+    let b = allLight ? 'light' : bandAt(m%1440, season);
+    if(isSat && b==='max') b = 'mid';
+    mins[b]++;
+  }
+  const total = e - s;
+  const seg = {light:0, mid:0, max:0};
+  let acc = 0; const keys = ['light','mid','max'];
+  keys.forEach(k=>{ seg[k] = Math.round(kwh*mins[k]/total*10)/10; acc += seg[k]; });
+  // 반올림 오차는 가장 큰 구간에 보정
+  const drift = Math.round((kwh-acc)*10)/10;
+  if(drift !== 0){
+    const big = keys.reduce((a,b)=> seg[a]>=seg[b]?a:b);
+    seg[big] = Math.round((seg[big]+drift)*10)/10;
+  }
+  const rates = DB.settings.rates[season];
+  const cost = Math.round(seg.light*rates.light + seg.mid*rates.mid + seg.max*rates.max);
+  return {season, seg, cost};
+}
+function segLabel(rec){
+  if(rec.mode==='super') return '슈퍼차저';
+  const parts = [];
+  ['light','mid','max'].forEach(k=>{ if(rec.seg && rec.seg[k]>0) parts.push(`${BAND_NAME[k]} ${fmtN(rec.seg[k])}kWh`); });
+  return parts.join(' / ') || '-';
+}
+
+/* ==================== 유틸 ==================== */
+const $ = s => document.querySelector(s);
+const DOW = ['일요일','월요일','화요일','수요일','목요일','금요일','토요일'];
+const fmt = n => Math.round(n).toLocaleString('ko-KR');
+const fmtN = n => (Math.round(n*10)/10).toLocaleString('ko-KR');
+function dowOf(dateStr){ return DOW[new Date(dateStr+'T00:00:00').getDay()]; }
+function todayStr(){ const d=new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
+function toast(msg){
+  const t = $('#toast'); t.textContent = msg; t.classList.add('show');
+  clearTimeout(toast._t); toast._t = setTimeout(()=>t.classList.remove('show'), 1800);
+}
+
+/* ==================== 상태 ==================== */
+let curMonth = todayStr().slice(0,7); // 'YYYY-MM'
+let editId = null;
+let formMode = 'normal';
+let endTouched = false; // 종료시간을 직접 고쳤으면 현재시각 자동갱신 중단
+let dateTouched = false;
+
+/* ==================== 테마 / 차량 ==================== */
+function applyTheme(){
+  const t = DB.settings.theme;
+  if(t==='auto') document.documentElement.removeAttribute('data-theme');
+  else document.documentElement.setAttribute('data-theme', t);
+  document.querySelectorAll('#themeSeg button').forEach(b=>b.classList.toggle('on', b.dataset.theme===t));
+}
+document.querySelectorAll('#themeSeg button').forEach(b=> b.onclick = ()=>{
+  DB.settings.theme = b.dataset.theme; save(); applyTheme();
+});
+function applyCar(){
+  document.querySelectorAll('#carSeg button').forEach(b=>b.classList.toggle('on', b.dataset.car===DB.settings.car));
+}
+document.querySelectorAll('#carSeg button').forEach(b=> b.onclick = ()=>{
+  DB.settings.car = b.dataset.car; save(); applyCar(); renderAll();
+});
+
+/* ==================== 월 네비 ==================== */
+function shiftMonth(d){
+  let [y,m] = curMonth.split('-').map(Number);
+  m += d; if(m<1){m=12;y--;} if(m>12){m=1;y++;}
+  curMonth = y+'-'+String(m).padStart(2,'0');
+  renderAll();
+}
+$('#mPrev').onclick = ()=>shiftMonth(-1);
+$('#mNext').onclick = ()=>shiftMonth(1);
+
+/* ==================== 대시보드 ==================== */
+function monthRecords(){
+  return DB.records.filter(r=>r.car===DB.settings.car && r.date.startsWith(curMonth))
+    .sort((a,b)=> (a.date+(a.start||''))<(b.date+(b.start||'')) ? -1 : 1);
+}
+function renderDash(){
+  const [y,m] = curMonth.split('-');
+  $('#mCur').textContent = `${y}년 ${+m}월`;
+  const recs = monthRecords();
+  const tot = recs.reduce((a,r)=>({kwh:a.kwh+r.kwh, cost:a.cost+r.cost}), {kwh:0,cost:0});
+  $('#dCost').innerHTML = fmt(tot.cost)+'<span class="un">원</span>';
+  $('#dCount').textContent = recs.length;
+  $('#dKwh').textContent = fmtN(tot.kwh);
+  $('#dUnit').textContent = tot.kwh? fmt(tot.cost/tot.kwh) : 0;
+
+  const grp = {normal:{kwh:0,cost:0}, super:{kwh:0,cost:0}};
+  recs.forEach(r=>{ grp[r.mode].kwh+=r.kwh; grp[r.mode].cost+=r.cost; });
+  $('#sNkwh').textContent = fmtN(grp.normal.kwh)+' kWh';
+  $('#sNcost').textContent = fmt(grp.normal.cost)+'원';
+  $('#sNunit').textContent = grp.normal.kwh? fmt(grp.normal.cost/grp.normal.kwh)+'원/kWh':'-';
+  $('#sSkwh').textContent = fmtN(grp.super.kwh)+' kWh';
+  $('#sScost').textContent = fmt(grp.super.cost)+'원';
+  $('#sSunit').textContent = grp.super.kwh? fmt(grp.super.cost/grp.super.kwh)+'원/kWh':'-';
+
+  // 주행거리: 이번 달 마지막 계기판 - (이전 기록의 마지막 계기판 || 이번 달 첫 계기판)
+  const odoRecs = DB.records.filter(r=>r.car===DB.settings.car && r.odo>0).sort((a,b)=>a.date<b.date?-1:1);
+  const inMonth = odoRecs.filter(r=>r.date.startsWith(curMonth));
+  const before = odoRecs.filter(r=>r.date < curMonth+'-01');
+  let km = null;
+  if(inMonth.length){
+    const last = inMonth[inMonth.length-1].odo;
+    const base = before.length ? before[before.length-1].odo : inMonth[0].odo;
+    if(last>base) km = last-base;
+  }
+  $('#dKm').innerHTML = (km!=null? fmt(km):'-')+'<span class="un">km</span>';
+  $('#dCostKm').innerHTML = (km? (Math.round(tot.cost/km*10)/10).toLocaleString('ko-KR'):'-')+'<span class="un">원/km</span>';
+
+  renderChart(recs);
+}
+
+/* ==================== 차트 ==================== */
+function renderChart(recs){
+  const svg = $('#chartSvg'), empty = $('#chartEmpty'), tip = $('#chartTip');
+  tip.style.display='none';
+  if(!recs.length){ svg.classList.add('hidden'); empty.classList.remove('hidden'); return; }
+  empty.classList.add('hidden'); svg.classList.remove('hidden');
+
+  const [y,m] = curMonth.split('-').map(Number);
+  const days = new Date(y, m, 0).getDate();
+  const daily = Array.from({length:days}, ()=>({normal:0, super:0}));
+  recs.forEach(r=>{ daily[+r.date.slice(8,10)-1][r.mode] += r.kwh; });
+  const maxV = Math.max(...daily.map(d=>d.normal+d.super), 1);
+  const niceMax = Math.ceil(maxV/20)*20;
+
+  const W=440, H=190, padL=30, padR=6, padT=8, padB=20;
+  const iw = W-padL-padR, ih = H-padT-padB;
+  const bw = Math.min(24, Math.max(4, iw/days - 2));
+  const cs = getComputedStyle(document.documentElement);
+  const c1 = cs.getPropertyValue('--series-1').trim();
+  const c2 = cs.getPropertyValue('--series-2').trim();
+  const gridC = cs.getPropertyValue('--grid').trim();
+  const inkM = cs.getPropertyValue('--ink-3').trim();
+  const surf = cs.getPropertyValue('--surface-1').trim();
+
+  let el = `<g>`;
+  // 가로 격자 + y축 눈금 (0, 절반, 최대)
+  [0, niceMax/2, niceMax].forEach(v=>{
+    const yy = padT + ih - v/niceMax*ih;
+    el += `<line x1="${padL}" y1="${yy}" x2="${W-padR}" y2="${yy}" stroke="${gridC}" stroke-width="1"/>`;
+    el += `<text x="${padL-5}" y="${yy+3.5}" font-size="9" fill="${inkM}" text-anchor="end" font-family="system-ui">${v}</text>`;
+  });
+  daily.forEach((d,i)=>{
+    const total = d.normal + d.super;
+    if(total<=0) return;
+    const x = padL + (i+0.5)*(iw/days) - bw/2;
+    let yTop = padT + ih;
+    const draw = (val, col)=>{
+      if(val<=0) return '';
+      const h = Math.max(2, val/niceMax*ih);
+      yTop -= h;
+      // 4px 라운드 상단, 세그먼트 사이 2px surface gap은 stroke로
+      return `<rect x="${x}" y="${yTop}" width="${bw}" height="${h}" rx="3" fill="${col}" stroke="${surf}" stroke-width="1"/>`;
+    };
+    const rNorm = draw(d.normal, c1);
+    const rSup = draw(d.super, c2);
+    el += `<g class="bar" data-day="${i+1}" data-n="${d.normal}" data-s="${d.super}" style="cursor:pointer">${rNorm}${rSup}
+      <rect x="${padL+i*(iw/days)}" y="${padT}" width="${iw/days}" height="${ih}" fill="transparent"/></g>`;
+  });
+  // x축 라벨: 5일 간격
+  for(let d=1; d<=days; d+= (days>20?5:2)){
+    const x = padL + (d-0.5)*(iw/days);
+    el += `<text x="${x}" y="${H-6}" font-size="9" fill="${inkM}" text-anchor="middle" font-family="system-ui">${d}</text>`;
+  }
+  el += `</g>`;
+  svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+  svg.innerHTML = el;
+
+  svg.querySelectorAll('.bar').forEach(g=>{
+    const show = (ev)=>{
+      const n=+g.dataset.n, s=+g.dataset.s;
+      tip.innerHTML = `<b>${+curMonth.slice(5)}월 ${g.dataset.day}일</b><br>`+
+        (n?`일반 <b>${fmtN(n)}kWh</b><br>`:'')+(s?`슈퍼 <b>${fmtN(s)}kWh</b>`:'');
+      tip.style.display='block';
+      const box = $('#chartBox').getBoundingClientRect();
+      const px = (ev.touches? ev.touches[0].clientX : ev.clientX) - box.left;
+      tip.style.left = Math.min(Math.max(px-40, 0), box.width-110)+'px';
+      tip.style.top = '0px';
+    };
+    g.addEventListener('mousemove', show);
+    g.addEventListener('touchstart', show, {passive:true});
+    g.addEventListener('mouseleave', ()=> tip.style.display='none');
+  });
+}
+
+/* ==================== 입력 폼 ==================== */
+function setFormMode(mode){
+  formMode = mode;
+  document.querySelectorAll('#modeSeg button').forEach(b=>b.classList.toggle('on', b.dataset.mode===mode));
+  $('#timeRow').classList.toggle('hidden', mode==='super');
+  $('#holRow').classList.toggle('hidden', mode==='super');
+  $('#superCostRow').classList.toggle('hidden', mode!=='super');
+  updatePreview();
+}
+document.querySelectorAll('#modeSeg button').forEach(b=> b.onclick = ()=>setFormMode(b.dataset.mode));
+
+function readForm(){
+  return {
+    date: $('#inDate').value,
+    end: $('#inEnd').value,
+    kwh: parseFloat($('#inKwh').value) || 0,
+    cost: parseInt($('#inCost').value) || 0,
+    odo: parseInt($('#inOdo').value) || 0,
+    hol: $('#inHoliday').checked,
+  };
+}
+// 시작시간 = 종료 - 충전량 ÷ 충전기출력(kW) — 종료시간에서 역산
+function calcStart(end, kwh){
+  const kw = DB.settings.chargerKw || 7;
+  const s = (toMin(end) - Math.round(kwh/kw*60) + 2880) % 1440;
+  return String(Math.floor(s/60)).padStart(2,'0')+':'+String(s%60).padStart(2,'0');
+}
+function nowHM(){
+  const d = new Date();
+  return String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');
+}
+// 현재 시각 추적: 시계 표시 + 입력 폼의 날짜/종료시간을 접속 시각으로 유지
+function tickNow(){
+  const hm = nowHM();
+  $('#nowClock').textContent = hm;
+  if(editId) return;
+  if(!dateTouched){
+    const t = todayStr();
+    if($('#inDate').value !== t){ $('#inDate').value = t; autoHoliday(); }
+  }
+  if(!endTouched && $('#inEnd').value !== hm){
+    $('#inEnd').value = hm;
+    updatePreview();
+  }
+}
+setInterval(tickNow, 10000);
+// 폰에서 앱을 다시 열었을 때도 즉시 현재 시각으로
+document.addEventListener('visibilitychange', ()=>{ if(!document.hidden) tickNow(); });
+function autoHoliday(){
+  const d = $('#inDate').value;
+  if(d) $('#inHoliday').checked = isAllLightAuto(d);
+}
+function updatePreview(){
+  const f = readForm();
+  const cp = $('#cpCost'), cs = $('#cpSeg');
+  if(formMode==='super'){
+    if(f.kwh>0 && f.cost>0){
+      cp.textContent = fmt(f.cost)+'원';
+      cs.textContent = `슈퍼차저 ${fmtN(f.kwh)}kWh · 단가 ${fmt(f.cost/f.kwh)}원/kWh`;
+    } else { cp.textContent='-'; cs.textContent='충전량과 총 요금을 입력하세요'; }
+    return;
+  }
+  if(f.date && f.end && f.kwh>0){
+    const start = calcStart(f.end, f.kwh);
+    const r = splitCharge(f.date, start, f.end, f.kwh, f.hol);
+    cp.textContent = fmt(r.cost)+'원';
+    cs.innerHTML = `시작 예상 ${start} ~ ${f.end} · ${dowOf(f.date)} · ${SEASON_NAME[r.season]}<br>`+
+      segLabel({mode:'normal', seg:r.seg})+` · 단가 ${fmt(r.cost/f.kwh)}원/kWh`;
+  } else { cp.textContent='-'; cs.textContent='충전량만 입력하면 시작시간·요금이 자동 계산됩니다'; }
+}
+$('#inDate').addEventListener('input', (e)=>{ if(e.isTrusted) dateTouched=true; autoHoliday(); updatePreview(); });
+$('#inEnd').addEventListener('input', (e)=>{ if(e.isTrusted) endTouched=true; updatePreview(); });
+$('#inKwh').addEventListener('input', updatePreview);
+$('#inCost').addEventListener('input', updatePreview);
+$('#inHoliday').addEventListener('change', updatePreview);
+
+$('#btnSave').onclick = ()=>{
+  const f = readForm();
+  if(!f.date){ toast('날짜를 입력하세요'); return; }
+  if(f.kwh<=0){ toast('충전량을 입력하세요'); return; }
+  let rec;
+  if(formMode==='super'){
+    if(f.cost<=0){ toast('총 요금을 입력하세요'); return; }
+    rec = {mode:'super', car:DB.settings.car, date:f.date, start:'', end:'', kwh:f.kwh, seg:null, cost:f.cost, odo:f.odo, hol:false};
+  } else {
+    if(!f.end){ toast('종료 시간을 입력하세요'); return; }
+    const start = calcStart(f.end, f.kwh);
+    const r = splitCharge(f.date, start, f.end, f.kwh, f.hol);
+    rec = {mode:'normal', car:DB.settings.car, date:f.date, start:start, end:f.end, kwh:f.kwh, seg:r.seg, cost:r.cost, odo:f.odo, hol:f.hol};
+  }
+  if(editId){
+    const i = DB.records.findIndex(x=>x.id===editId);
+    rec.id = editId;
+    if(i>=0) DB.records[i] = rec;
+    editId = null;
+    toast('수정되었습니다');
+  } else {
+    rec.id = Date.now().toString(36)+Math.random().toString(36).slice(2,6);
+    DB.records.push(rec);
+    toast('저장되었습니다 ⚡');
+  }
+  save();
+  curMonth = rec.date.slice(0,7);
+  resetForm();
+  renderAll();
+  switchPage('dash');
+};
+
+function resetForm(){
+  $('#inDate').value = todayStr();
+  ['inKwh','inCost','inOdo'].forEach(id=> $('#'+id).value='');
+  $('#inEnd').value = nowHM();
+  editId = null;
+  endTouched = false;
+  dateTouched = false;
+  autoHoliday();
+  $('#formTitle').textContent = '충전 기록 입력';
+  $('#btnSave').textContent = '저장';
+  $('#btnCancelEdit').classList.add('hidden');
+  setFormMode('normal');
+}
+$('#btnCancelEdit').onclick = ()=>{ resetForm(); switchPage('list'); };
+
+function editRec(id){
+  const r = DB.records.find(x=>x.id===id);
+  if(!r) return;
+  editId = id;
+  endTouched = true; dateTouched = true; // 수정 중엔 현재시각으로 덮어쓰지 않음
+  $('#inDate').value = r.date;
+  $('#inEnd').value = r.end||'';
+  $('#inKwh').value = r.kwh;
+  $('#inCost').value = r.mode==='super'? r.cost : '';
+  $('#inOdo').value = r.odo||'';
+  $('#inHoliday').checked = !!r.hol;
+  DB.settings.car = r.car; save(); applyCar();
+  setFormMode(r.mode);
+  $('#formTitle').textContent = '기록 수정';
+  $('#btnSave').textContent = '수정 저장';
+  $('#btnCancelEdit').classList.remove('hidden');
+  switchPage('input');
+}
+function delRec(id){
+  const r = DB.records.find(x=>x.id===id);
+  if(!r) return;
+  if(!confirm(`${r.date} ${fmtN(r.kwh)}kWh 기록을 삭제할까요?`)) return;
+  DB.records = DB.records.filter(x=>x.id!==id);
+  save(); renderAll(); toast('삭제되었습니다');
+}
+
+/* ==================== 기록 목록 ==================== */
+function renderList(){
+  const recs = monthRecords().slice().reverse();
+  const box = $('#recList');
+  if(!recs.length){ box.innerHTML = '<div class="card"><div class="empty">이번 달 기록이 없습니다<br>⚡ 입력 탭에서 추가하세요</div></div>'; return; }
+  box.innerHTML = recs.map(r=>`
+    <div class="rec">
+      <div class="top">
+        <span class="date">${r.date.slice(5).replace('-','/')}<span class="dow">${dowOf(r.date)}</span></span>
+        <span class="cost">${fmt(r.cost)}원</span>
+      </div>
+      <div class="mid">
+        <span><span class="badge ${r.mode==='super'?'super':''}">${r.mode==='super'?'슈퍼차저':'일반'}</span>${r.start? r.start+' ~ '+r.end : ''}</span>
+        <span><b>${fmtN(r.kwh)}</b> kWh</span>
+      </div>
+      <div class="sub">
+        <span>${segLabel(r)}</span>
+        <span>${r.odo? fmt(r.odo)+' km · ':''}${fmt(r.cost/r.kwh)}원/kWh</span>
+      </div>
+      <div class="acts">
+        <button onclick="editRec('${r.id}')">수정</button>
+        <button class="del" onclick="delRec('${r.id}')">삭제</button>
+      </div>
+    </div>`).join('');
+}
+
+/* ==================== 설정 ==================== */
+function renderRates(){
+  $('#inChargerKw').value = DB.settings.chargerKw;
+  const r = DB.settings.rates;
+  $('#rateBody').innerHTML = ['summer','spring','winter'].map(s=>`
+    <tr><td>${SEASON_NAME[s]}</td>
+      <td><input type="number" step="0.1" id="rate-${s}-light" value="${r[s].light}"></td>
+      <td><input type="number" step="0.1" id="rate-${s}-mid" value="${r[s].mid}"></td>
+      <td><input type="number" step="0.1" id="rate-${s}-max" value="${r[s].max}"></td>
+    </tr>`).join('');
+}
+$('#btnSaveRates').onclick = ()=>{
+  ['summer','spring','winter'].forEach(s=> ['light','mid','max'].forEach(b=>{
+    const v = parseFloat($(`#rate-${s}-${b}`).value);
+    if(!isNaN(v) && v>=0) DB.settings.rates[s][b] = v;
+  }));
+  save(); toast('단가가 저장되었습니다'); updatePreview();
+};
+$('#inChargerKw').addEventListener('change', ()=>{
+  const v = parseFloat($('#inChargerKw').value);
+  if(!isNaN(v) && v>0){ DB.settings.chargerKw = v; save(); toast(`충전기 출력 ${v}kW 저장`); }
+});
+
+$('#btnCsv').onclick = ()=>{
+  if(!DB.records.length){ toast('내보낼 기록이 없습니다'); return; }
+  const rows = [['차량','날짜','요일','계절','시작','종료','충전량(kWh)','부하구간','총요금(원)','평균단가(원/kWh)','KM']];
+  DB.records.slice().sort((a,b)=>(a.car+a.date+(a.start||''))<(b.car+b.date+(b.start||''))?-1:1).forEach(r=>{
+    rows.push([CAR_NAME[r.car]||r.car, r.date, dowOf(r.date), SEASON_NAME[seasonOf(r.date)],
+      r.start||'-', r.end||'-', r.kwh, segLabel(r), r.cost,
+      Math.round(r.cost/r.kwh*10)/10, r.odo||'']);
+  });
+  const csv = '﻿'+rows.map(r=>r.map(c=>`"${String(c).replace(/"/g,'""')}"`).join(',')).join('\r\n');
+  download(new Blob([csv],{type:'text/csv;charset=utf-8'}), `전기차충전_${todayStr()}.csv`);
+};
+$('#btnBackup').onclick = ()=>{
+  download(new Blob([JSON.stringify(DB,null,2)],{type:'application/json'}), `전기차충전_백업_${todayStr()}.json`);
+};
+$('#btnRestore').onclick = ()=> $('#fileRestore').click();
+$('#fileRestore').onchange = (e)=>{
+  const file = e.target.files[0]; if(!file) return;
+  const fr = new FileReader();
+  fr.onload = ()=>{
+    try{
+      const d = JSON.parse(fr.result);
+      if(!Array.isArray(d.records)) throw 0;
+      localStorage.setItem(LS_KEY, JSON.stringify(d));
+      DB = load(); save();
+      applyTheme(); applyCar(); renderAll(); renderRates(); toast('복원되었습니다');
+    }catch(err){ toast('올바른 백업 파일이 아닙니다'); }
+  };
+  fr.readAsText(file);
+  e.target.value='';
+};
+$('#btnWipe').onclick = ()=>{
+  if(!confirm('모든 기록과 설정을 삭제할까요?\n(백업을 먼저 받아두는 것을 추천합니다)')) return;
+  localStorage.removeItem(LS_KEY);
+  DB = load(); applyTheme(); applyCar(); renderAll(); renderRates(); toast('초기화되었습니다');
+};
+function download(blob, name){
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob); a.download = name;
+  document.body.appendChild(a); a.click();
+  setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); }, 500);
+}
+
+/* ==================== 탭 ==================== */
+function switchPage(p){
+  document.querySelectorAll('.page-sec').forEach(s=>s.classList.toggle('on', s.id==='page-'+p));
+  document.querySelectorAll('nav.tabs button').forEach(b=>b.classList.toggle('on', b.dataset.page===p));
+  $('#monthNav').style.visibility = (p==='dash'||p==='list')? 'visible':'hidden';
+  if(p==='input') tickNow(); // 입력 탭 열 때 접속 시각으로 즉시 갱신
+  window.scrollTo(0,0);
+}
+document.querySelectorAll('nav.tabs button').forEach(b=> b.onclick = ()=>switchPage(b.dataset.page));
+
+function renderAll(){ renderDash(); renderList(); }
+
+/* ==================== 초기화 ==================== */
+applyTheme();
+applyCar();
+resetForm();
+renderRates();
+renderAll();
+tickNow();
+</script>
+</body>
+</html>
