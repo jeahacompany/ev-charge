@@ -346,8 +346,16 @@ nav.tabs button.on{color:var(--accent)}
       <span class="dowbadge" id="dateDow"></span>
     </div>
 
-    <label class="f" for="inKwh">충전량 (kWh)</label>
-    <input type="number" id="inKwh" inputmode="decimal" step="0.1" min="0" placeholder="예: 22" enterkeyhint="next">
+    <div class="row2">
+      <div>
+        <label class="f" for="inKwh">충전량 (kWh)</label>
+        <input type="number" id="inKwh" inputmode="decimal" step="0.1" min="0" placeholder="예: 22" enterkeyhint="next">
+      </div>
+      <div>
+        <label class="f" for="inKw">출력 (kW) <span class="nowchip">비우면 7</span></label>
+        <input type="number" id="inKw" inputmode="decimal" step="0.5" min="1" placeholder="7" enterkeyhint="next">
+      </div>
+    </div>
 
     <div id="timeRow">
       <label class="f" for="inStartH">시작 시간 <span class="nowchip">지금 <span id="nowClock">--:--</span> 자동</span></label>
@@ -487,7 +495,7 @@ nav.tabs button.on{color:var(--accent)}
 
 <script>
 'use strict';
-const APP_VER = '22 (2026-07-10)';
+const APP_VER = '23 (2026-07-15)';
 // 주의: 아래 두 선언은 시드 주입(save 호출)보다 반드시 먼저 와야 함
 const BACKUP_URL = 'https://script.google.com/macros/s/AKfycbyJUA-w8falwPZa0uOmKND2MlHkfh4L2RoDwg4IAvw51X5BEnNscW-QPFgE6aBJzvv75g/exec'; // 구글시트 자동백업 (ho910830)
 let backupTimer = null;
@@ -502,6 +510,7 @@ window.addEventListener('error', function(ev){
   }catch(e){}
 });
 const CHANGELOG = [
+  ['v23','충전기 출력(kW) 직접 입력 가능(비우면 7kW) · 충전 시작 때 키로수·kW도 같이 기억'],
   ['v22','충전 시작/종료 기록이 누른 차량에만 적용되게 수정'],
   ['v21','충전 시작/종료 버튼 — 누르면 시간 자동 기록(앱 꺼도 저장 전까지 기억) · 종료시간 직접 수정'],
   ['v20','업데이트 내역·접속 기록을 5개씩 보여주고 더보기로 펼치기'],
@@ -996,14 +1005,18 @@ function readForm(){
     date: $('#inDate').value,
     start: getStartVal(),
     kwh: parseFloat($('#inKwh').value) || 0,
+    kw: parseFloat($('#inKw').value) || 0,
     cost: parseInt($('#inCost').value) || 0,
     odo: parseInt($('#inOdo').value) || 0,
     hol: $('#inDate').value ? isAllLightAuto($('#inDate').value) : false,
   };
 }
-// 종료시간 = 시작 + 충전량 ÷ 충전기출력(kW)
-function calcEnd(start, kwh){
-  const kw = DB.settings.chargerKw || 7;
+// 종료시간 = 시작 + 충전량 ÷ 충전기출력(kW) — 폼에 kW를 적으면 그 값, 비우면 기본값
+function formKw(){
+  return parseFloat($('#inKw').value) || DB.settings.chargerKw || 7;
+}
+function calcEnd(start, kwh, kw){
+  kw = kw || formKw();
   const e = (toMin(start) + Math.round(kwh/kw*60)) % 1440;
   return String(Math.floor(e/60)).padStart(2,'0')+':'+String(e%60).padStart(2,'0');
 }
@@ -1068,6 +1081,8 @@ function applySession(){
   $('#inDate').value = s.startDate; dateTouched = true; autoHoliday();
   setStartSel(s.start); startTouched = true;
   if(s.end){ setEndSel(s.end); $('#endRow').classList.remove('hidden'); }
+  if(s.odo) $('#inOdo').value = s.odo;
+  if(s.kw) $('#inKw').value = s.kw;
   updatePreview();
 }
 // 차량 전환 시: 세션이 그 차 것이면 폼에 반영, 아니면 기본(현재 시각) 모드로
@@ -1080,10 +1095,24 @@ function syncFormToCar(){
   tickNow(); renderTimer(); updatePreview();
 }
 $('#btnChgStart').onclick = ()=>{
-  writeSess({car: DB.settings.car, startDate: todayStr(), start: nowHM(), end: null});
+  writeSess({car: DB.settings.car, startDate: todayStr(), start: nowHM(), end: null,
+             odo: parseInt($('#inOdo').value)||0, kw: parseFloat($('#inKw').value)||0});
   applySession();
-  toast(`${CAR_NAME[DB.settings.car]} 충전 시작 기록! ⚡ 저장 전까지 기억합니다`);
+  const withOdo = $('#inOdo').value ? ' (키로수 포함)' : '';
+  toast(`${CAR_NAME[DB.settings.car]} 충전 시작 기록!${withOdo} ⚡`);
 };
+// 세션 진행 중에 키로수·kW를 적으면 그것도 같이 기억
+['inOdo','inKw'].forEach(id=> $('#'+id).addEventListener('input', ()=>{
+  if(id==='inKw') updatePreview(); // 출력이 바뀌면 종료 예상 갱신
+  const s = readSess();
+  if(!s || !s.start || !sessCarMatch(s)) return;
+  if(id==='inOdo') s.odo = parseInt($('#inOdo').value)||0;
+  else s.kw = parseFloat($('#inKw').value)||0;
+  writeSess(s);
+}));
+$('#inKw').addEventListener('keydown', e=>{
+  if(e.key==='Enter'){ e.preventDefault(); jumpTo($('#inStartH')); }
+});
 $('#btnChgEnd').onclick = ()=>{
   const s = readSess();
   if(!s || !s.start){ toast('먼저 충전 시작을 눌러주세요'); return; }
@@ -1145,7 +1174,8 @@ function updatePreview(){
     if(manual && end === f.start){ manual = false; end = calcEnd(f.start, f.kwh); } // 같은 분이면 자동계산
     const r = splitCharge(f.date, f.start, end, f.kwh, f.hol);
     cp.textContent = fmt(r.cost)+'원';
-    cs.innerHTML = `${f.start} ~ ${end} ${manual?'(실제 시간)':'종료 예상'} · ${dowOf(f.date)} · ${SEASON_NAME[r.season]}<br>`+
+    const kwNote = (!manual && f.kw) ? ` (${fmtN(f.kw)}kW)` : '';
+    cs.innerHTML = `${f.start} ~ ${end} ${manual?'(실제 시간)':'종료 예상'+kwNote} · ${dowOf(f.date)} · ${SEASON_NAME[r.season]}<br>`+
       segLabel({mode:'normal', seg:r.seg})+` · 평균단가 ${fmt(r.cost/f.kwh)}원/kWh`;
   } else { cp.textContent='-'; cs.textContent='충전량만 입력하면 종료시간·요금이 자동 계산됩니다'; }
 }
@@ -1201,6 +1231,7 @@ function doSave(){
     if(end === f.start) end = calcEnd(f.start, f.kwh); // 같은 분이면 자동계산
     const r = splitCharge(f.date, f.start, end, f.kwh, f.hol);
     rec = {mode:'normal', car:DB.settings.car, date:f.date, start:f.start, end:end, kwh:f.kwh, seg:r.seg, cost:r.cost, odo:f.odo, hol:f.hol};
+    if(f.kw) rec.kw = f.kw; // 이 충전에 쓴 충전기 출력(기본값과 다를 때)
   }
   if(editId){
     const i = DB.records.findIndex(x=>x.id===editId);
@@ -1224,7 +1255,7 @@ function doSave(){
 
 function resetForm(){
   $('#inDate').value = todayStr();
-  ['inKwh','inCost','inOdo'].forEach(id=> $('#'+id).value='');
+  ['inKwh','inKw','inCost','inOdo'].forEach(id=> $('#'+id).value='');
   setStartSel(nowRounded());
   $('#endRow').classList.add('hidden');
   editId = null;
@@ -1249,6 +1280,7 @@ function editRec(id){
   if(r.start) setStartSel(r.start);
   if(r.mode==='normal' && r.end){ setEndSel(r.end); $('#endRow').classList.remove('hidden'); } // 종료시간도 직접 수정 가능
   $('#inKwh').value = r.kwh;
+  $('#inKw').value = r.kw || '';
   $('#inCost').value = r.mode==='super'? r.cost : '';
   $('#inOdo').value = r.odo||'';
   autoHoliday();
