@@ -459,12 +459,12 @@ nav.tabs button.on{color:var(--accent)}
 
   <div class="card">
     <h2>계산 기준</h2>
-    <div class="rule-title">한전 전기차 충전전력요금(자가소비용) · 저압 · 전력량요금만 계산</div>
+    <div class="rule-title">한전 전기차 충전전력요금(자가소비용) · 저압 · 전력량요금만 계산 · 2026-04-16 개편 반영</div>
 
     <div class="rule-sec">여름 · 봄가을 시간대</div>
     <div class="rule-row"><span class="chip light">경부하</span><span>22:00 ~ 08:00</span></div>
-    <div class="rule-row"><span class="chip mid">중간부하</span><span>08~11시 · 12~13시 · 18~22시</span></div>
-    <div class="rule-row"><span class="chip max">최대부하</span><span>11~12시 · 13~18시</span></div>
+    <div class="rule-row"><span class="chip mid">중간부하</span><span>08~15시 · 21~22시</span></div>
+    <div class="rule-row"><span class="chip max">최대부하</span><span>15~21시</span></div>
 
     <div class="rule-sec">겨울 시간대</div>
     <div class="rule-row"><span class="chip light">경부하</span><span>22:00 ~ 08:00</span></div>
@@ -474,6 +474,7 @@ nav.tabs button.on{color:var(--accent)}
     <div class="rule-sec">요일 · 공휴일 규칙</div>
     <div class="rule-row"><span class="chip">토요일</span><span>최대부하 → 중간부하 요금으로</span></div>
     <div class="rule-row"><span class="chip">일·공휴일</span><span>전시간 경부하 (2026~27년 자동 인식)</span></div>
+    <div class="rule-row"><span class="chip">주말할인</span><span>봄가을 주말·공휴일 11~14시 요금 50% 할인</span></div>
 
     <div class="rule-sec">자동 계산</div>
     <div class="rule-row"><span class="chip">계절</span><span>여름 6~8월 · 겨울 11~2월 · 나머지 봄가을</span></div>
@@ -504,7 +505,7 @@ nav.tabs button.on{color:var(--accent)}
 
 <script>
 'use strict';
-const APP_VER = '27 (2026-07-15)';
+const APP_VER = '28 (2026-07-15)';
 // 주의: 아래 두 선언은 시드 주입(save 호출)보다 반드시 먼저 와야 함
 const BACKUP_URL = 'https://script.google.com/macros/s/AKfycbyJUA-w8falwPZa0uOmKND2MlHkfh4L2RoDwg4IAvw51X5BEnNscW-QPFgE6aBJzvv75g/exec'; // 구글시트 자동백업 (ho910830)
 let backupTimer = null;
@@ -519,6 +520,7 @@ window.addEventListener('error', function(ev){
   }catch(e){}
 });
 const CHANGELOG = [
+  ['v28','2026-04-16 요금 개편 반영 — 여름·봄가을 최대부하 15~21시로 변경 · 봄가을 주말·공휴일 11~14시 50% 할인'],
   ['v27','비밀번호 잠금 제거 (테스트 후 원상복구)'],
   ['v26','비밀번호 잠금 추가 (한 번 푼 기기는 다시 안 물어봄)'],
   ['v25','대시보드 기간 보기 — 월별 / 최근 3개월 / 올해 / 전체'],
@@ -716,31 +718,39 @@ function seasonOf(dateStr){
   if(m>=11 || m<=2) return 'winter';
   return 'spring';
 }
-function bandAt(min, season){ // min: 0~1439
+function bandAt(min, season){ // min: 0~1439 — 2026-04-16 계시별 개편 반영
   const h = min/60;
   if(h>=22 || h<8) return 'light';
-  if(season==='winter'){
+  if(season==='winter'){ // 겨울은 개편에서 변경 없음
     if((h>=9&&h<12)||(h>=16&&h<19)) return 'max';
     return 'mid'; // 8~9, 12~16, 19~22
   }
-  if((h>=11&&h<12)||(h>=13&&h<18)) return 'max';
-  return 'mid'; // 8~11, 12~13, 18~22
+  if(h>=15 && h<21) return 'max'; // 여름·봄가을 최대부하 15~21시
+  return 'mid'; // 8~15, 21~22
 }
 const toMin = t => { const [h,m]=t.split(':').map(Number); return h*60+m; };
 // 시작~종료 시간에 걸친 시간대별 분(minute)에 비례해 충전량을 배분
 // allLight: 일요일·공휴일 → 전시간 경부하 / 토요일: 최대부하 → 중간부하
+// 봄가을 주말·공휴일 11~14시: 전력량요금 50% 할인 (2026-04-18 시행)
 function splitCharge(dateStr, start, end, kwh, allLight){
   const season = seasonOf(dateStr);
   const isSat = new Date(dateStr+'T00:00:00').getDay()===6;
+  const discountDay = season==='spring' && (isSat || allLight);
+  const rates = DB.settings.rates[season];
   let s = toMin(start), e = toMin(end);
   if(e <= s) e += 1440; // 자정 넘김
+  const total = e - s;
   const mins = {light:0, mid:0, max:0};
+  let rateSum = 0, discMin = 0;
   for(let m=s; m<e; m++){
-    let b = allLight ? 'light' : bandAt(m%1440, season);
+    const mm = m % 1440;
+    let b = allLight ? 'light' : bandAt(mm, season);
     if(isSat && b==='max') b = 'mid';
     mins[b]++;
+    let r = rates[b];
+    if(discountDay && mm >= 660 && mm < 840){ r *= 0.5; discMin++; } // 11:00~14:00
+    rateSum += r;
   }
-  const total = e - s;
   const seg = {light:0, mid:0, max:0};
   let acc = 0; const keys = ['light','mid','max'];
   keys.forEach(k=>{ seg[k] = Math.round(kwh*mins[k]/total*10)/10; acc += seg[k]; });
@@ -750,14 +760,15 @@ function splitCharge(dateStr, start, end, kwh, allLight){
     const big = keys.reduce((a,b)=> seg[a]>=seg[b]?a:b);
     seg[big] = Math.round((seg[big]+drift)*10)/10;
   }
-  const rates = DB.settings.rates[season];
-  const cost = Math.round(seg.light*rates.light + seg.mid*rates.mid + seg.max*rates.max);
-  return {season, seg, cost};
+  const cost = Math.round(kwh * rateSum / total);
+  const disc = Math.round(kwh * discMin / total * 10)/10; // 할인 적용된 충전량(kWh)
+  return {season, seg, cost, disc};
 }
 function segLabel(rec){
   if(rec.mode==='super') return '슈퍼차저';
   const parts = [];
   ['light','mid','max'].forEach(k=>{ if(rec.seg && rec.seg[k]>0) parts.push(`${BAND_NAME[k]} ${fmtN(rec.seg[k])}kWh`); });
+  if(rec.disc > 0) parts.push(`주말할인 ${fmtN(rec.disc)}kWh`);
   return parts.join(' / ') || '-';
 }
 
@@ -1221,7 +1232,7 @@ function updatePreview(){
     cp.textContent = fmt(r.cost)+'원';
     const kwNote = (!manual && f.kw) ? ` (${fmtN(f.kw)}kW)` : '';
     cs.innerHTML = `${f.start} ~ ${end} ${manual?'(실제 시간)':'종료 예상'+kwNote} · ${dowOf(f.date)} · ${SEASON_NAME[r.season]}<br>`+
-      segLabel({mode:'normal', seg:r.seg})+` · 평균단가 ${fmt(r.cost/f.kwh)}원/kWh`;
+      segLabel({mode:'normal', seg:r.seg, disc:r.disc})+` · 평균단가 ${fmt(r.cost/f.kwh)}원/kWh`;
   } else { cp.textContent='-'; cs.textContent='충전량만 입력하면 종료시간·요금이 자동 계산됩니다'; }
 }
 $('#inDate').addEventListener('input', (e)=>{ if(e.isTrusted) dateTouched=true; autoHoliday(); updatePreview(); });
@@ -1277,6 +1288,7 @@ function doSave(){
     const r = splitCharge(f.date, f.start, end, f.kwh, f.hol);
     rec = {mode:'normal', car:DB.settings.car, date:f.date, start:f.start, end:end, kwh:f.kwh, seg:r.seg, cost:r.cost, odo:f.odo, hol:f.hol};
     if(f.kw) rec.kw = f.kw; // 이 충전에 쓴 충전기 출력(기본값과 다를 때)
+    if(r.disc > 0) rec.disc = r.disc; // 봄가을 주말·공휴일 11~14시 할인 적용분
   }
   if(editId){
     const i = DB.records.findIndex(x=>x.id===editId);
