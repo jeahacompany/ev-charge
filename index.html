@@ -505,7 +505,7 @@ nav.tabs button.on{color:var(--accent)}
 
 <script>
 'use strict';
-const APP_VER = '29 (2026-07-15)';
+const APP_VER = '30 (2026-07-15)';
 // 주의: 아래 두 선언은 시드 주입(save 호출)보다 반드시 먼저 와야 함
 const BACKUP_URL = 'https://script.google.com/macros/s/AKfycbyJUA-w8falwPZa0uOmKND2MlHkfh4L2RoDwg4IAvw51X5BEnNscW-QPFgE6aBJzvv75g/exec'; // 구글시트 자동백업 (ho910830)
 let backupTimer = null;
@@ -520,6 +520,7 @@ window.addEventListener('error', function(ev){
   }catch(e){}
 });
 const CHANGELOG = [
+  ['v30','7/5 일요일 심야충전 날짜 정정(3,035원 복원) · 자정 넘는 충전은 앞뒤 날짜 규칙을 각각 적용'],
   ['v29','6~7월 기존 기록도 개편된 요금으로 재계산 (전체 -4,646원)'],
   ['v28','2026-04-16 요금 개편 반영 — 여름·봄가을 최대부하 15~21시로 변경 · 봄가을 주말·공휴일 11~14시 50% 할인'],
   ['v27','비밀번호 잠금 제거 (테스트 후 원상복구)'],
@@ -602,7 +603,7 @@ const SEEDY = [
   {id:'sy2606-02', date:'2026-06-14', start:'18:00', end:'22:09', kwh:29, seg:{light:29,mid:0,max:0},  cost:2445, odo:3160, hol:true},
   {id:'sy2606-03', date:'2026-06-21', start:'18:00', end:'22:26', kwh:31, seg:{light:31,mid:0,max:0},  cost:2613, odo:3346, hol:true},
   {id:'sy2606-04', date:'2026-06-26', start:'18:00', end:'22:34', kwh:32, seg:{light:4,mid:28,max:0},  cost:5153, odo:3488, hol:false},
-  {id:'sy2607-01', date:'2026-07-06', start:'19:00', end:'00:09', kwh:36, seg:{light:36,mid:0,max:0},  cost:3035, odo:3644, hol:false},
+  {id:'sy2607-01', date:'2026-07-05', start:'19:00', end:'00:09', kwh:36, seg:{light:36,mid:0,max:0},  cost:3035, odo:3644, hol:true}, // 일요일 저녁~월요일 새벽 충전
 ].map(r=> Object.assign({mode:'normal', car:'my'}, r));
 let DB = load();
 // 과거 데이터 1회 자동 주입 (이미 있으면 건너뜀)
@@ -731,25 +732,34 @@ function bandAt(min, season){ // min: 0~1439 — 2026-04-16 계시별 개편 반
 }
 function toMin(t){ const [h,m]=t.split(':').map(Number); return h*60+m; }
 // 시작~종료 시간에 걸친 시간대별 분(minute)에 비례해 충전량을 배분
-// allLight: 일요일·공휴일 → 전시간 경부하 / 토요일: 최대부하 → 중간부하
+// 일요일·공휴일 → 전시간 경부하 / 토요일: 최대부하 → 중간부하
 // 봄가을 주말·공휴일 11~14시: 전력량요금 50% 할인 (2026-04-18 시행)
+// 자정을 넘는 충전은 시작일과 다음날의 요일 규칙을 각각 적용
 function splitCharge(dateStr, start, end, kwh, allLight){
-  const season = seasonOf(dateStr);
-  const isSat = new Date(dateStr+'T00:00:00').getDay()===6;
-  const discountDay = season==='spring' && (isSat || allLight);
+  const season = seasonOf(dateStr); // 계절은 시작일 기준
   const rates = DB.settings.rates[season];
+  const dayRule = (offset)=>{ // offset 0=시작일, 1=다음날
+    const d = new Date(dateStr+'T00:00:00'); d.setDate(d.getDate()+offset);
+    const ds = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+    const dow = d.getDay();
+    const light = offset===0 ? allLight : (dow===0 || isHoliday(ds));
+    const sat = dow===6;
+    return {light, sat, disc: season==='spring' && (light || sat)};
+  };
+  const rules = [dayRule(0), dayRule(1)];
   let s = toMin(start), e = toMin(end);
   if(e <= s) e += 1440; // 자정 넘김
   const total = e - s;
   const mins = {light:0, mid:0, max:0};
   let rateSum = 0, discMin = 0;
   for(let m=s; m<e; m++){
+    const R = rules[Math.floor(m/1440)];
     const mm = m % 1440;
-    let b = allLight ? 'light' : bandAt(mm, season);
-    if(isSat && b==='max') b = 'mid';
+    let b = R.light ? 'light' : bandAt(mm, season);
+    if(R.sat && b==='max') b = 'mid';
     mins[b]++;
     let r = rates[b];
-    if(discountDay && mm >= 660 && mm < 840){ r *= 0.5; discMin++; } // 11:00~14:00
+    if(R.disc && mm >= 660 && mm < 840){ r *= 0.5; discMin++; } // 11:00~14:00
     rateSum += r;
   }
   const seg = {light:0, mid:0, max:0};
@@ -1526,6 +1536,17 @@ if(!DB.settings.retariff2026){
   });
   DB.settings.retariff2026 = true;
   delete DB.settings.lastError; // 재계산 이전 버전에서 남은 오류 표시 정리
+  save();
+}
+// 정정: 모델Y 7/6 심야충전은 실제로 7/5(일) 19:00 시작 → 일요일 규칙으로 전량 경부하
+if(!DB.settings.fix0705){
+  const r = DB.records.find(x=>x.id==='sy2607-01');
+  if(r){
+    r.date = '2026-07-05'; r.hol = true;
+    r.seg = {light:36, mid:0, max:0}; r.cost = 3035;
+    delete r.disc;
+  }
+  DB.settings.fix0705 = true;
   save();
 }
 applyTheme();
