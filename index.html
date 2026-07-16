@@ -220,6 +220,17 @@ nav.tabs button.on{color:var(--accent)}
   background:transparent;color:var(--ink-2);font-size:16px;font-weight:700;cursor:pointer;font-family:inherit;
 }
 .mbtns button.mok{background:var(--danger);border-color:transparent;color:#fff}
+.lockscr{
+  position:fixed;inset:0;z-index:100;display:flex;align-items:center;justify-content:center;
+  background:var(--page);padding:24px;
+}
+.lockscr.hidden{display:none}
+.lockbox{width:100%;max-width:280px;text-align:center;display:flex;flex-direction:column;gap:12px}
+.locktitle{font-size:19px;font-weight:700;margin-top:4px}
+.locksub{font-size:14px;color:var(--ink-3)}
+.lockbox input{text-align:center;font-size:24px;letter-spacing:8px;font-variant-numeric:tabular-nums}
+.lockbox .btn{margin-top:2px}
+.lockerr{font-size:14px;color:var(--danger);min-height:20px}
 .updbar{
   position:fixed;top:0;left:0;right:0;z-index:60;display:none;align-items:center;justify-content:center;gap:14px;
   background:var(--accent);color:#fff;padding:11px;font-size:15px;font-weight:600;
@@ -239,6 +250,17 @@ nav.tabs button.on{color:var(--accent)}
 </style>
 </head>
 <body>
+
+<div class="lockscr" id="lockScr">
+  <div class="lockbox">
+    <div style="font-size:44px">🔒</div>
+    <div class="locktitle">전기차 충전 관리</div>
+    <div class="locksub">비밀번호를 입력하세요</div>
+    <input type="password" id="pinInput" inputmode="numeric" maxlength="8" autocomplete="off" placeholder="••••">
+    <button type="button" class="btn" id="btnUnlock">확인</button>
+    <div class="lockerr" id="lockErr"></div>
+  </div>
+</div>
 
 <div class="updbar" id="updBar">새 버전이 나왔어요 <button id="btnUpd">업데이트</button></div>
 
@@ -504,7 +526,32 @@ nav.tabs button.on{color:var(--accent)}
 
 <script>
 'use strict';
-const APP_VER = '25 (2026-07-15)';
+const APP_VER = '26 (2026-07-15)';
+/* ==================== 비밀번호 잠금 ==================== */
+// 구경꾼 차단용 간단 잠금. 한 번 푼 기기는 다시 묻지 않음(PIN 바꾸면 전 기기 재잠금).
+const PIN_CODE = '2944';
+const UNLOCK_KEY = 'evChargeApp.unlocked';
+(function initLock(){
+  try{
+    if(localStorage.getItem(UNLOCK_KEY) === PIN_CODE){
+      document.getElementById('lockScr').classList.add('hidden');
+      return;
+    }
+  }catch(e){}
+  const inp = document.getElementById('pinInput');
+  const tryUnlock = ()=>{
+    if(inp.value === PIN_CODE){
+      try{ localStorage.setItem(UNLOCK_KEY, PIN_CODE); }catch(e){}
+      document.getElementById('lockScr').classList.add('hidden');
+    } else {
+      document.getElementById('lockErr').textContent = '비밀번호가 틀렸습니다';
+      inp.value = ''; inp.focus();
+    }
+  };
+  document.getElementById('btnUnlock').onclick = tryUnlock;
+  inp.addEventListener('keydown', e=>{ if(e.key==='Enter'){ e.preventDefault(); tryUnlock(); } });
+  setTimeout(()=>inp.focus(), 300);
+})();
 // 주의: 아래 두 선언은 시드 주입(save 호출)보다 반드시 먼저 와야 함
 const BACKUP_URL = 'https://script.google.com/macros/s/AKfycbyJUA-w8falwPZa0uOmKND2MlHkfh4L2RoDwg4IAvw51X5BEnNscW-QPFgE6aBJzvv75g/exec'; // 구글시트 자동백업 (ho910830)
 let backupTimer = null;
@@ -519,6 +566,7 @@ window.addEventListener('error', function(ev){
   }catch(e){}
 });
 const CHANGELOG = [
+  ['v26','비밀번호 잠금 추가 (한 번 푼 기기는 다시 안 물어봄)'],
   ['v25','대시보드 기간 보기 — 월별 / 최근 3개월 / 올해 / 전체'],
   ['v24','백업 저장 용량 한계 제거(장기 보관 안전장치) · 최근 오류 설정에 표시'],
   ['v23','충전기 출력(kW) 직접 입력 가능(비우면 7kW) · 충전 시작 때 키로수·kW도 같이 기억'],
