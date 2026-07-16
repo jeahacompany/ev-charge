@@ -505,7 +505,7 @@ nav.tabs button.on{color:var(--accent)}
 
 <script>
 'use strict';
-const APP_VER = '28 (2026-07-15)';
+const APP_VER = '29 (2026-07-15)';
 // 주의: 아래 두 선언은 시드 주입(save 호출)보다 반드시 먼저 와야 함
 const BACKUP_URL = 'https://script.google.com/macros/s/AKfycbyJUA-w8falwPZa0uOmKND2MlHkfh4L2RoDwg4IAvw51X5BEnNscW-QPFgE6aBJzvv75g/exec'; // 구글시트 자동백업 (ho910830)
 let backupTimer = null;
@@ -520,6 +520,7 @@ window.addEventListener('error', function(ev){
   }catch(e){}
 });
 const CHANGELOG = [
+  ['v29','6~7월 기존 기록도 개편된 요금으로 재계산 (전체 -4,646원)'],
   ['v28','2026-04-16 요금 개편 반영 — 여름·봄가을 최대부하 15~21시로 변경 · 봄가을 주말·공휴일 11~14시 50% 할인'],
   ['v27','비밀번호 잠금 제거 (테스트 후 원상복구)'],
   ['v26','비밀번호 잠금 추가 (한 번 푼 기기는 다시 안 물어봄)'],
@@ -728,7 +729,7 @@ function bandAt(min, season){ // min: 0~1439 — 2026-04-16 계시별 개편 반
   if(h>=15 && h<21) return 'max'; // 여름·봄가을 최대부하 15~21시
   return 'mid'; // 8~15, 21~22
 }
-const toMin = t => { const [h,m]=t.split(':').map(Number); return h*60+m; };
+function toMin(t){ const [h,m]=t.split(':').map(Number); return h*60+m; }
 // 시작~종료 시간에 걸친 시간대별 분(minute)에 비례해 충전량을 배분
 // allLight: 일요일·공휴일 → 전시간 경부하 / 토요일: 최대부하 → 중간부하
 // 봄가을 주말·공휴일 11~14시: 전력량요금 50% 할인 (2026-04-18 시행)
@@ -1513,6 +1514,20 @@ function logVisit(){
 }
 
 /* ==================== 초기화 ==================== */
+// 2026-04-16 요금 개편 소급 반영: 시간이 있는 일반충전 기록을 새 시간대·주말할인으로 1회 재계산
+// (기기마다 같은 계산이라 결과 동일 → 동기화 충돌 없음. 모든 함수가 준비된 초기화 시점에 실행)
+if(!DB.settings.retariff2026){
+  DB.records.forEach(r=>{
+    if(r.mode!=='normal' || !r.start || !r.end) return;
+    const hol = (typeof r.hol==='boolean') ? r.hol : isAllLightAuto(r.date);
+    const res = splitCharge(r.date, r.start, r.end, r.kwh, hol);
+    r.seg = res.seg; r.cost = res.cost; r.hol = hol;
+    if(res.disc > 0) r.disc = res.disc; else delete r.disc;
+  });
+  DB.settings.retariff2026 = true;
+  delete DB.settings.lastError; // 재계산 이전 버전에서 남은 오류 표시 정리
+  save();
+}
 applyTheme();
 applyCar();
 resetForm();
