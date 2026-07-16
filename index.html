@@ -107,6 +107,8 @@ input:focus,select:focus{outline:2px solid var(--accent);outline-offset:-1px;bor
 }
 .seg button.on{background:var(--surface-1);color:var(--ink-1);box-shadow:0 1px 4px rgba(0,0,0,.12)}
 .seg.three{grid-template-columns:1fr 1fr 1fr}
+.seg.scope{grid-template-columns:repeat(4,1fr);margin-top:12px}
+.seg.scope button{padding:9px 0;font-size:13.5px}
 header.app .carwrap{display:block;padding-top:0;padding-bottom:10px}
 header.app .carwrap .seg{margin-top:0;background:var(--surface-1)}
 header.app .carwrap .seg button.on{background:var(--accent);color:#fff}
@@ -259,8 +261,14 @@ nav.tabs button.on{color:var(--accent)}
 
 <!-- ============ 대시보드 ============ -->
 <section class="page-sec on" id="page-dash">
+  <div class="seg scope" id="scopeSeg">
+    <button type="button" data-scope="month" class="on">월별</button>
+    <button type="button" data-scope="3m">최근 3개월</button>
+    <button type="button" data-scope="year">올해</button>
+    <button type="button" data-scope="all">전체</button>
+  </div>
   <div class="card hero">
-    <div class="lb">이번 달 충전요금</div>
+    <div class="lb" id="heroLabel">이번 달 충전요금</div>
     <div class="heroval" id="dCost">0<span class="un">원</span></div>
     <div class="herosub">
       <div><span class="sl">충전 횟수</span><span class="sv"><b id="dCount">0</b>회</span></div>
@@ -289,11 +297,11 @@ nav.tabs button.on{color:var(--accent)}
   </div>
 
   <div class="tiles">
-    <div class="tile"><div class="lb">이번 달 주행</div><div class="vl" id="dKm">-<span class="un">km</span></div></div>
+    <div class="tile"><div class="lb" id="kmLabel">이번 달 주행</div><div class="vl" id="dKm">-<span class="un">km</span></div></div>
     <div class="tile"><div class="lb">km당 충전비</div><div class="vl" id="dCostKm">-<span class="un">원/km</span></div></div>
   </div>
 
-  <div class="card">
+  <div class="card" id="dailyCard">
     <h2>일자별 충전량 (kWh)</h2>
     <div class="legend">
       <span><span class="swatch" style="background:var(--series-1)"></span>일반충전</span>
@@ -496,7 +504,7 @@ nav.tabs button.on{color:var(--accent)}
 
 <script>
 'use strict';
-const APP_VER = '24 (2026-07-15)';
+const APP_VER = '25 (2026-07-15)';
 // 주의: 아래 두 선언은 시드 주입(save 호출)보다 반드시 먼저 와야 함
 const BACKUP_URL = 'https://script.google.com/macros/s/AKfycbyJUA-w8falwPZa0uOmKND2MlHkfh4L2RoDwg4IAvw51X5BEnNscW-QPFgE6aBJzvv75g/exec'; // 구글시트 자동백업 (ho910830)
 let backupTimer = null;
@@ -511,6 +519,7 @@ window.addEventListener('error', function(ev){
   }catch(e){}
 });
 const CHANGELOG = [
+  ['v25','대시보드 기간 보기 — 월별 / 최근 3개월 / 올해 / 전체'],
   ['v24','백업 저장 용량 한계 제거(장기 보관 안전장치) · 최근 오류 설정에 표시'],
   ['v23','충전기 출력(kW) 직접 입력 가능(비우면 7kW) · 충전 시작 때 키로수·kW도 같이 기억'],
   ['v22','충전 시작/종료 기록이 누른 차량에만 적용되게 수정'],
@@ -808,13 +817,38 @@ $('#mPrev').onclick = ()=>shiftMonth(-1);
 $('#mNext').onclick = ()=>shiftMonth(1);
 
 /* ==================== 대시보드 ==================== */
-function monthRecords(){
-  return DB.records.filter(r=>r.car===DB.settings.car && r.date.startsWith(curMonth))
+/* 보기 기간: 월별 / 최근 3개월 / 올해 / 전체 */
+let scope = 'month';
+const SCOPE_NAME = {month:'이번 달', '3m':'최근 3개월', year:'올해', all:'전체'};
+function periodRange(){ // [시작 YYYY-MM, 끝 YYYY-MM] (null이면 무제한)
+  const t = todayStr().slice(0,7);
+  if(scope==='month') return [curMonth, curMonth];
+  if(scope==='3m'){
+    let [y,m] = t.split('-').map(Number);
+    m -= 2; if(m<1){ m+=12; y--; }
+    return [y+'-'+String(m).padStart(2,'0'), t];
+  }
+  if(scope==='year') return [t.slice(0,4)+'-01', t.slice(0,4)+'-12'];
+  return [null, null];
+}
+function monthRecords(){ // 선택된 기간의 기록 (이름은 과거 호환용)
+  const [f, to] = periodRange();
+  return DB.records.filter(r=> r.car===DB.settings.car
+      && (!f || r.date >= f+'-01') && (!to || r.date <= to+'-31'))
     .sort((a,b)=> (a.date+(a.start||''))<(b.date+(b.start||'')) ? -1 : 1);
 }
+document.querySelectorAll('#scopeSeg button').forEach(b=> b.onclick = ()=>{
+  scope = b.dataset.scope;
+  document.querySelectorAll('#scopeSeg button').forEach(x=>x.classList.toggle('on', x===b));
+  renderAll();
+});
 function renderDash(){
   const [y,m] = curMonth.split('-');
-  $('#mCur').textContent = `${y}년 ${+m}월`;
+  // 월별 모드일 때만 ◀▶ 이동 가능, 다른 기간은 라벨만 표시
+  $('#mCur').textContent = scope==='month' ? `${y}년 ${+m}월` : SCOPE_NAME[scope];
+  $('#mPrev').style.visibility = $('#mNext').style.visibility = scope==='month' ? 'visible' : 'hidden';
+  $('#heroLabel').textContent = SCOPE_NAME[scope]+' 충전요금';
+  $('#kmLabel').textContent = SCOPE_NAME[scope]+' 주행';
   const recs = monthRecords();
   const tot = recs.reduce((a,r)=>({kwh:a.kwh+r.kwh, cost:a.cost+r.cost}), {kwh:0,cost:0});
   $('#dCost').innerHTML = fmt(tot.cost)+'<span class="un">원</span>';
@@ -831,23 +865,27 @@ function renderDash(){
   $('#sScost').textContent = fmt(grp.super.cost)+'원';
   $('#sSunit').textContent = grp.super.kwh? fmt(grp.super.cost/grp.super.kwh)+'원/kWh':'-';
 
-  const km = monthKm(DB.settings.car, curMonth);
+  const [pf, pt] = periodRange();
+  const km = periodKm(DB.settings.car, pf, pt);
   $('#dKm').innerHTML = (km!=null? fmt(km):'-')+'<span class="un">km</span>';
   $('#dCostKm').innerHTML = (km? (Math.round(tot.cost/km*10)/10).toLocaleString('ko-KR'):'-')+'<span class="un">원/km</span>';
 
-  renderChart(recs);
+  // 일자별 차트는 월별 보기에서만 의미 있음 (다른 기간은 아래 월별 비교 차트가 담당)
+  $('#dailyCard').classList.toggle('hidden', scope!=='month');
+  if(scope==='month') renderChart(recs);
   renderTrend();
 }
-// 해당 월 주행거리: 월 마지막 계기판 - (이전 기록의 마지막 계기판 || 월 첫 계기판)
-function monthKm(car, ym){
+// 기간 주행거리: 기간 내 마지막 계기판 - (기간 이전 마지막 계기판 || 기간 내 첫 계기판)
+function periodKm(car, fromYm, toYm){
   const odoRecs = DB.records.filter(r=>r.car===car && r.odo>0).sort((a,b)=>a.date<b.date?-1:1);
-  const inMonth = odoRecs.filter(r=>r.date.startsWith(ym));
-  if(!inMonth.length) return null;
-  const before = odoRecs.filter(r=>r.date < ym+'-01');
-  const last = inMonth[inMonth.length-1].odo;
-  const base = before.length ? before[before.length-1].odo : inMonth[0].odo;
+  const inR = odoRecs.filter(r=> (!fromYm || r.date >= fromYm+'-01') && (!toYm || r.date <= toYm+'-31'));
+  if(!inR.length) return null;
+  const before = fromYm ? odoRecs.filter(r=>r.date < fromYm+'-01') : [];
+  const last = inR[inR.length-1].odo;
+  const base = before.length ? before[before.length-1].odo : inR[0].odo;
   return last>base ? last-base : null;
 }
+function monthKm(car, ym){ return periodKm(car, ym, ym); } // 월별 비교 차트에서 사용
 
 /* ==================== 차트 ==================== */
 function renderChart(recs){
@@ -981,7 +1019,10 @@ function renderTrend(){
   svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
   svg.innerHTML = el;
   svg.querySelectorAll('rect[data-ym]').forEach(r=> r.addEventListener('click', ()=>{
-    curMonth = r.dataset.ym; renderAll();
+    curMonth = r.dataset.ym;
+    scope = 'month'; // 막대를 누르면 그 달의 월별 보기로
+    document.querySelectorAll('#scopeSeg button').forEach(x=>x.classList.toggle('on', x.dataset.scope==='month'));
+    renderAll();
   }));
 }
 document.querySelectorAll('#trendSeg button').forEach(b=> b.onclick = ()=>{
@@ -1307,7 +1348,7 @@ function delRec(id){
 function renderList(){
   const recs = monthRecords().slice().reverse();
   const box = $('#recList');
-  if(!recs.length){ box.innerHTML = '<div class="card"><div class="empty">이번 달 기록이 없습니다<br>⚡ 입력 탭에서 추가하세요</div></div>'; return; }
+  if(!recs.length){ box.innerHTML = `<div class="card"><div class="empty">${SCOPE_NAME[scope]} 기록이 없습니다<br>⚡ 입력 탭에서 추가하세요</div></div>`; return; }
   box.innerHTML = recs.map(r=>`
     <div class="rec">
       <div class="top">
